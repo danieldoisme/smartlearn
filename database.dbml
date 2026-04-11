@@ -1,0 +1,174 @@
+// Enum Definitions
+Enum question_type_enum {
+  mcq
+  multi
+  fill
+}
+
+Enum display_mode_enum {
+  immediate
+  end
+}
+
+Enum file_type_enum {
+  pdf
+  docx
+}
+
+Enum session_type_enum {
+  learn
+  review
+}
+
+// Table Definitions
+Table users {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  full_name VARCHAR(100) [note: 'Họ và tên']
+  email VARCHAR(255) [unique, note: 'Email đăng nhập, UNIQUE']
+  password_hash VARCHAR(255) [note: 'Mật khẩu đã mã hóa bcrypt']
+  avatar_url VARCHAR(500) [null, note: 'Đường dẫn ảnh đại diện']
+  email_verified BOOLEAN [note: 'Trạng thái xác nhận email']
+  created_at DATETIME [note: 'Thời điểm tạo tài khoản']
+  updated_at DATETIME [note: 'Thời điểm cập nhật gần nhất']
+}
+
+Table user_preferences {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [unique, note: 'FK -> users(id), UNIQUE']
+  default_question_count INT [note: 'Số câu hỏi mặc định mỗi phiên']
+  preferred_question_type question_type_enum
+  answer_display_mode display_mode_enum
+}
+
+Table topics {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  name VARCHAR(100) [note: 'Tên chủ đề']
+  created_at DATETIME [note: 'Thời điểm tạo']
+}
+
+Table documents {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  topic_id INT [null, note: 'FK -> topics(id)']
+  title VARCHAR(255) [note: 'Tên tài liệu']
+  file_path VARCHAR(500) [note: 'Đường dẫn file gốc trên server']
+  file_type file_type_enum
+  file_size INT [note: 'Kích thước file (bytes)']
+  created_at DATETIME [note: 'Thời điểm upload']
+  updated_at DATETIME [note: 'Thời điểm cập nhật']
+}
+
+Table chapters {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  document_id INT [note: 'FK -> documents(id)']
+  title VARCHAR(255) [note: 'Tên chương/phần']
+  order_index INT [note: 'Thứ tự hiển thị trong tài liệu']
+  content_text LONGTEXT [note: 'Nội dung text đã trích xuất']
+  page_start INT [null, note: 'Trang bắt đầu (PDF)']
+  page_end INT [null, note: 'Trang kết thúc']
+}
+
+Table questions {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  chapter_id INT [note: 'FK -> chapters(id)']
+  question_type question_type_enum
+  content TEXT [note: 'Nội dung câu hỏi']
+  correct_answer VARCHAR(500) [null, note: 'Đáp án đúng (dạng điền từ)']
+  source_text TEXT [note: 'Đoạn văn nguồn trích dẫn']
+  source_page INT [null, note: 'Số trang chứa đoạn văn']
+  created_at DATETIME [note: 'Thời điểm tạo']
+}
+
+Table question_options {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  question_id INT [note: 'FK -> questions(id)']
+  label CHAR(1) [note: 'Nhãn đáp án: A, B, C, D']
+  content VARCHAR(500) [note: 'Nội dung lựa chọn']
+  is_correct BOOLEAN [note: 'Đánh dấu đáp án đúng']
+}
+
+Table study_sessions {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  chapter_id INT [note: 'FK -> chapters(id)']
+  session_type session_type_enum
+  total_questions INT [note: 'Tổng số câu hỏi trong phiên']
+  correct_count INT [note: 'Số câu trả lời đúng']
+  started_at DATETIME [note: 'Thời điểm bắt đầu']
+  completed_at DATETIME [null, note: 'Thời điểm kết thúc']
+}
+
+Table user_answers {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  session_id INT [note: 'FK -> study_sessions(id)']
+  question_id INT [note: 'FK -> questions(id)']
+  user_id INT [note: 'FK -> users(id)']
+  selected_answer VARCHAR(500) [null, note: 'Đáp án người dùng đã chọn']
+  is_correct BOOLEAN [note: 'Kết quả đúng/sai']
+  is_skipped BOOLEAN [note: 'Đánh dấu câu bỏ qua']
+  answered_at DATETIME [note: 'Thời điểm trả lời']
+}
+
+Table exams {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  time_limit_minutes INT [note: 'Thời gian làm bài (phút)']
+  total_questions INT [note: 'Tổng số câu hỏi']
+  correct_count INT [null, note: 'Số câu đúng']
+  score DECIMAL(5,2) [null, note: 'Điểm phần trăm']
+  started_at DATETIME [note: 'Thời điểm bắt đầu']
+  completed_at DATETIME [null, note: 'Thời điểm nộp bài']
+  is_paused BOOLEAN [note: 'Trạng thái tạm dừng']
+}
+
+Table exam_questions {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  exam_id INT [note: 'FK -> exams(id)']
+  question_id INT [note: 'FK -> questions(id)']
+  order_index INT [note: 'Thứ tự câu hỏi trong đề']
+  selected_answer VARCHAR(500) [null, note: 'Đáp án đã chọn']
+  is_correct BOOLEAN [null, note: 'Kết quả']
+}
+
+Table bookmarks {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  question_id INT [null, note: 'FK -> questions(id)']
+  chapter_id INT [null, note: 'FK -> chapters(id)']
+  page_number INT [null, note: 'Số trang đánh dấu']
+  created_at DATETIME [note: 'Thời điểm tạo bookmark']
+}
+
+Table notes {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  bookmark_id INT [null, note: 'FK -> bookmarks(id)']
+  question_id INT [null, note: 'FK -> questions(id)']
+  content TEXT [note: 'Nội dung ghi chú']
+  created_at DATETIME [note: 'Thời điểm tạo']
+  updated_at DATETIME [note: 'Thời điểm cập nhật']
+}
+
+// Relationships (Foreign Keys)
+Ref: user_preferences.user_id - users.id // 1:1
+Ref: topics.user_id > users.id
+Ref: documents.user_id > users.id
+Ref: documents.topic_id > topics.id
+Ref: chapters.document_id > documents.id
+Ref: questions.chapter_id > chapters.id
+Ref: question_options.question_id > questions.id
+Ref: study_sessions.user_id > users.id
+Ref: study_sessions.chapter_id > chapters.id
+Ref: user_answers.session_id > study_sessions.id
+Ref: user_answers.question_id > questions.id
+Ref: user_answers.user_id > users.id
+Ref: exams.user_id > users.id
+Ref: exam_questions.exam_id > exams.id
+Ref: exam_questions.question_id > questions.id
+Ref: bookmarks.user_id > users.id
+Ref: bookmarks.question_id > questions.id
+Ref: bookmarks.chapter_id > chapters.id
+Ref: notes.user_id > users.id
+Ref: notes.bookmark_id > bookmarks.id
+Ref: notes.question_id > questions.id
