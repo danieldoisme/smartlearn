@@ -1,0 +1,11 @@
+.git
+.venv
+node_modules
+**/__pycache__
+frontend/dist
+backend/.pytest_cache
+.DS_Store
+*.pyc
+*.pyo
+*.pyd
+.dbml

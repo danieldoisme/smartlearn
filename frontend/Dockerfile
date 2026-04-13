@@ -2,14 +2,14 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-# Copy package descriptors
+# Copy package descriptors from the context root
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy everything else
-COPY . .
+# Copy only the frontend directory as a subdirectory
+COPY frontend/ ./frontend/
 
 EXPOSE 5173
 

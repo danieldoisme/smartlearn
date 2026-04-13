@@ -1,14 +1,15 @@
-
 services:
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules # Anonymous volume to preserve node_modules locally
+      - ./frontend:/app/frontend
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - /app/node_modules
     environment:
       - VITE_API_BASE_URL=http://localhost:8080
     depends_on:
@@ -16,13 +17,17 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8080:8080"
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - /app/.venv
     environment:
       - UV_LINK_MODE=copy
+      - PYTHONPATH=/app/backend
     env_file:
       - ./.env
