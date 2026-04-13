@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import String, Integer, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.database import Base
+from backend.app.database import Base
 
 class Bookmark(Base):
     __tablename__ = "bookmarks"

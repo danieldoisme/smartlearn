@@ -19,4 +19,4 @@ RUN uv sync
 EXPOSE 8080
 
 # Start command (app.main:app works because /app/backend is in PYTHONPATH)
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+CMD ["uv", "run", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

@@ -28,6 +28,6 @@ services:
       - /app/.venv
     environment:
       - UV_LINK_MODE=copy
-      - PYTHONPATH=/app/backend
+      - PYTHONPATH=/app
     env_file:
       - ./.env

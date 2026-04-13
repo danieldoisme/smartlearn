@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import httpx
-from app.config import settings
+from backend.app.config import settings
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -59,4 +59,4 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=True)
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8080, reload=True)
