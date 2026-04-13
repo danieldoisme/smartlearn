@@ -1,0 +1,46 @@
+from datetime import datetime, timezone
+from typing import Optional, List
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.database import Base
+from app.models.enums import QuestionType, DisplayMode
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    preferences: Mapped["UserPreference"] = relationship(back_populates="user", uselist=False)
+    topics: Mapped[List["Topic"]] = relationship(back_populates="user")
+    documents: Mapped[List["Document"]] = relationship(back_populates="user")
+    study_sessions: Mapped[List["StudySession"]] = relationship(back_populates="user")
+    user_answers: Mapped[List["UserAnswer"]] = relationship(back_populates="user")
+    exams: Mapped[List["Exam"]] = relationship(back_populates="user")
+    bookmarks: Mapped[List["Bookmark"]] = relationship(back_populates="user")
+    notes: Mapped[List["Note"]] = relationship(back_populates="user")
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    default_question_count: Mapped[int] = mapped_column(Integer, default=10)
+    preferred_question_type: Mapped[QuestionType] = mapped_column(default=QuestionType.MCQ)
+    answer_display_mode: Mapped[DisplayMode] = mapped_column(default=DisplayMode.IMMEDIATE)
+
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="preferences")
