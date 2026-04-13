@@ -1,2 +1,23 @@
-.idea/
+# Env
 .env
+.env.*
+!.env.example
+
+# Default Mac/OS files
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+uv.lock
