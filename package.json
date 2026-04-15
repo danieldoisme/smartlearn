@@ -4,15 +4,19 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite frontend",
-    "build": "vite build frontend",
+    "dev": "vite --config frontend/vite.config.js frontend",
+    "build": "vite build --config frontend/vite.config.js frontend",
     "lint": "eslint frontend",
-    "preview": "vite preview frontend"
+    "preview": "vite preview --config frontend/vite.config.js frontend"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.15.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.14.1",
+    "recharts": "^3.8.1",
+    "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
