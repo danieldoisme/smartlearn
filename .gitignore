@@ -21,3 +21,6 @@ __pycache__/
 *.pyc
 .venv/
 uv.lock
+
+# Claude
+.omc/
