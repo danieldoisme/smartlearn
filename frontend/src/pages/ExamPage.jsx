@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppLayout from '../components/AppLayout'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Clock, Pause, Play, Flag, ChevronLeft, ChevronRight, AlertTriangle, Send, ClipboardCheck,
+} from 'lucide-react'
+import AppLayout from '@/components/AppLayout'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
 const QUESTIONS = [
   { id: 1, content: 'Phát biểu nào sau đây đúng về ACID trong hệ thống CSDL?', options: ['Atomicity, Consistency, Isolation, Durability', 'Availability, Consistency, Integrity, Durability', 'Atomicity, Concurrency, Integrity, Data', 'Tất cả đều sai'] },
@@ -29,140 +39,159 @@ export default function ExamPage() {
   const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0')
   const secs = (timeLeft % 60).toString().padStart(2, '0')
   const timerRed = timeLeft < 300
-
   const q = QUESTIONS[current % QUESTIONS.length]
   const unanswered = TOTAL - Object.keys(answers).length
+  const answeredCount = Object.keys(answers).length
 
   const boxStyle = (i) => {
-    if (i === current) return 'ring-2 ring-[#924c28] ring-offset-1 bg-[#ffeade] text-[#924c28] font-bold'
-    if (answers[i] !== undefined) return 'bg-[#924c28] text-white font-bold'
-    return 'bg-white border border-[#d6a98c] text-[#9a7259]'
+    if (i === current) return 'ring-2 ring-primary ring-offset-1 bg-primary-container text-primary font-bold scale-105'
+    if (flagged.has(i)) return 'bg-secondary-container text-secondary font-bold'
+    if (answers[i] !== undefined) return 'bg-primary text-on-primary font-bold shadow-sm'
+    return 'bg-white border border-outline-variant text-muted hover:bg-surface-dim'
   }
 
   return (
     <AppLayout>
       <div className="flex flex-col h-screen overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-[#ffeade] shrink-0">
-          <div>
-            <p className="text-xs text-[#9a7259]">Bài kiểm tra tổng hợp</p>
-            <h2 className="text-sm font-bold text-[#492b17]">Kiểm tra tổng hợp — Cơ sở dữ liệu</h2>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className={`text-3xl font-bold tabular-nums px-4 py-2 rounded-xl ${
-              timerRed ? 'text-[#a73b21] bg-[#ffd0b5] animate-pulse' : 'text-[#492b17] bg-[#fff1ea]'
-            }`}>
-              {mins}:{secs}
+        <div className="flex items-center justify-between px-8 py-3.5 bg-white border-b border-outline-variant shrink-0 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
+              <ClipboardCheck size={16} className="text-muted" />
             </div>
-            <button onClick={() => setPaused(!paused)}
-              className="px-4 py-2 rounded-xl border border-[#d6a98c] text-sm font-medium text-[#7b573f] hover:bg-[#fff1ea] transition-colors">
-              {paused ? '▶ Tiếp tục' : '⏸ Tạm dừng'}
-            </button>
-            <button onClick={() => setShowDialog(true)}
-              className="px-4 py-2 rounded-xl bg-[#924c28] text-white text-sm font-semibold hover:bg-[#7a3e1f] transition-colors">
-              Nộp bài
-            </button>
+            <div>
+              <p className="text-[11px] text-muted font-medium">Bài kiểm tra tổng hợp</p>
+              <h2 className="text-sm font-bold text-on-surface">Kiểm tra tổng hợp — Cơ sở dữ liệu</h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold tabular-nums transition-all duration-300",
+              timerRed ? "text-error bg-error-container animate-pulse shadow-lg shadow-error/10" : "text-on-surface bg-surface-container"
+            )}>
+              <Clock size={16} />
+              <span className="text-2xl">{mins}:{secs}</span>
+            </div>
+            <Button variant="outline" onClick={() => setPaused(!paused)}>
+              {paused ? <><Play size={14} /> Tiếp tục</> : <><Pause size={14} /> Tạm dừng</>}
+            </Button>
+            <Button onClick={() => setShowDialog(true)}>
+              <Send size={14} /> Nộp bài
+            </Button>
           </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Question */}
           <div className="flex-1 flex flex-col overflow-auto p-8">
-            <div className="bg-white rounded-2xl border border-[#ffeade] shadow-sm p-8 flex-1">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#ffeade] text-[#924c28]">
-                  Câu {current + 1} / {TOTAL}
-                </span>
-                <button onClick={() => setFlagged(prev => {
-                  const s = new Set(prev); s.has(current) ? s.delete(current) : s.add(current); return s
-                })}
-                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                    flagged.has(current) ? 'bg-[#ffdfa0] text-[#7a5a01]' : 'bg-[#fff1ea] text-[#9a7259] hover:bg-[#ffdfa0]'
-                  }`}>
-                  🚩 Đánh dấu xem lại
-                </button>
-              </div>
-              <p className="text-base font-semibold text-[#492b17] mb-8 leading-relaxed">{q.content}</p>
-              <div className="space-y-3">
-                {q.options.map((opt, idx) => (
-                  <button key={idx}
-                    onClick={() => setAnswers(prev => ({ ...prev, [current]: idx }))}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-sm font-medium text-left transition-all ${
-                      answers[current] === idx
-                        ? 'border-[#924c28] bg-[#ffeade] text-[#924c28]'
-                        : 'border-[#d6a98c] bg-white hover:border-[#924c28] hover:bg-[#fff1ea]'
-                    }`}>
-                    <span className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center text-xs font-bold shrink-0 ${
-                      answers[current] === idx ? 'border-[#924c28] bg-[#924c28] text-white' : 'border-[#d6a98c] text-[#9a7259]'
-                    }`}>
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div key={current}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+                className="flex-1"
+              >
+                <Card className="h-full">
+                  <CardContent className="p-8">
+                    <div className="flex items-center justify-between mb-5">
+                      <Badge>Câu {current + 1} / {TOTAL}</Badge>
+                      <Button
+                        variant={flagged.has(current) ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setFlagged(prev => { const s = new Set(prev); s.has(current) ? s.delete(current) : s.add(current); return s })}
+                      >
+                        <Flag size={14} className={flagged.has(current) ? 'fill-current' : ''} />
+                        {flagged.has(current) ? 'Đã đánh dấu' : 'Đánh dấu'}
+                      </Button>
+                    </div>
+                    <p className="text-lg font-semibold text-on-surface mb-8 leading-relaxed">{q.content}</p>
+                    <div className="space-y-3">
+                      {q.options.map((opt, idx) => (
+                        <button key={idx}
+                          onClick={() => setAnswers(prev => ({ ...prev, [current]: idx }))}
+                          className={cn(
+                            "w-full flex items-center gap-3.5 px-5 py-4 rounded-xl border-2 text-sm font-medium text-left transition-all duration-200",
+                            answers[current] === idx
+                              ? "border-primary bg-primary-container/30 text-primary shadow-md shadow-primary/10 -translate-y-0.5"
+                              : "border-outline-variant bg-white hover:border-primary-light hover:bg-surface-dim hover:shadow-sm hover:-translate-y-0.5"
+                          )}>
+                          <span className={cn(
+                            "w-7 h-7 rounded-lg border-2 flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-200",
+                            answers[current] === idx ? "border-primary bg-primary text-on-primary" : "border-outline-variant text-muted"
+                          )}>
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </AnimatePresence>
 
-            {/* Footer nav */}
             <div className="flex justify-between mt-4">
-              <button disabled={current === 0} onClick={() => setCurrent(c => c - 1)}
-                className="px-5 py-2.5 rounded-xl border border-[#d6a98c] text-sm font-medium text-[#7b573f] disabled:opacity-40 hover:bg-[#fff1ea] transition-colors">
-                ← Câu trước
-              </button>
-              <button disabled={current >= TOTAL - 1} onClick={() => setCurrent(c => c + 1)}
-                className="px-5 py-2.5 rounded-xl bg-[#924c28] text-white text-sm font-semibold disabled:opacity-40 hover:bg-[#7a3e1f] transition-colors">
-                Câu sau →
-              </button>
+              <Button variant="outline" disabled={current === 0} onClick={() => setCurrent(c => c - 1)}>
+                <ChevronLeft size={16} /> Câu trước
+              </Button>
+              <Button disabled={current >= TOTAL - 1} onClick={() => setCurrent(c => c + 1)}>
+                Câu sau <ChevronRight size={16} />
+              </Button>
             </div>
           </div>
 
           {/* Right panel */}
-          <aside className="w-56 shrink-0 bg-white border-l border-[#ffeade] p-4 overflow-auto">
-            <h3 className="text-xs font-semibold text-[#9a7259] uppercase tracking-wide mb-3">Danh sách câu hỏi</h3>
+          <aside className="w-56 shrink-0 bg-white border-l border-outline-variant p-4 overflow-auto hidden lg:flex flex-col">
+            <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Danh sách câu hỏi</h3>
+            <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant">
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="text-muted font-medium">Đã làm</span>
+                <span className="text-primary font-bold">{answeredCount}/{TOTAL}</span>
+              </div>
+              <Progress value={(answeredCount / TOTAL) * 100} />
+            </div>
             <div className="grid grid-cols-4 gap-1.5 mb-4">
               {Array.from({ length: TOTAL }, (_, i) => (
                 <button key={i} onClick={() => setCurrent(i)}
-                  className={`w-full aspect-square rounded-lg text-xs transition-all ${boxStyle(i)}`}>
+                  className={cn("w-full aspect-square rounded-lg text-xs transition-all duration-200", boxStyle(i))}>
                   {i + 1}
                 </button>
               ))}
             </div>
-            <div className="text-xs text-[#9a7259] space-y-1.5">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[#924c28]" /><span>Đã làm</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-white border border-[#d6a98c]" /><span>Chưa làm</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[#ffdfa0]" /><span>Đánh dấu</span></div>
+            <div className="text-xs text-muted space-y-1.5">
+              {[['bg-primary','Đã làm'],['border border-outline-variant bg-white','Chưa làm'],['bg-secondary-container','Đánh dấu']].map(([c,l]) => (
+                <div key={l} className="flex items-center gap-2"><div className={cn("w-3.5 h-3.5 rounded", c)} /><span>{l}</span></div>
+              ))}
             </div>
-            <div className="mt-4 p-3 rounded-xl bg-[#fff1ea]">
-              <p className="text-xs text-[#9a7259]">Chưa làm</p>
-              <p className="text-lg font-bold text-[#492b17]">{unanswered} câu</p>
+            <div className="mt-4 p-3.5 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant">
+              <p className="text-xs text-muted font-medium">Chưa hoàn thành</p>
+              <p className="text-2xl font-bold text-on-surface">{unanswered} <span className="text-sm font-medium text-muted">câu</span></p>
             </div>
           </aside>
         </div>
       </div>
 
-      {/* Submit dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full">
-            <div className="text-4xl text-center mb-4">⚠️</div>
-            <h3 className="text-lg font-bold text-[#492b17] text-center mb-2">Xác nhận nộp bài?</h3>
-            <p className="text-sm text-[#9a7259] text-center mb-6">
-              Bạn còn <strong className="text-[#a73b21]">{unanswered} câu</strong> chưa trả lời.
-              Sau khi nộp bạn không thể chỉnh sửa.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDialog(false)}
-                className="flex-1 py-3 rounded-xl border border-[#d6a98c] text-[#7b573f] font-semibold text-sm hover:bg-[#fff1ea] transition-colors">
-                Hủy
-              </button>
-              <button onClick={() => navigate('/result')}
-                className="flex-1 py-3 rounded-xl bg-[#924c28] text-white font-semibold text-sm hover:bg-[#7a3e1f] transition-colors">
-                Nộp bài
-              </button>
+      {/* Submit dialog — Radix */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader className="text-center">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-secondary-container to-primary-container flex items-center justify-center mx-auto mb-2">
+              <AlertTriangle size={28} className="text-primary" />
             </div>
-          </div>
-        </div>
-      )}
+            <DialogTitle className="text-center">Xác nhận nộp bài?</DialogTitle>
+            <DialogDescription className="text-center">
+              Bạn còn <strong className="text-error bg-error-container px-1.5 py-0.5 rounded">{unanswered} câu</strong> chưa trả lời. Sau khi nộp bạn không thể chỉnh sửa.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)}>Hủy</Button>
+            <Button className="flex-1" onClick={() => navigate('/result')}>
+              <Send size={14} /> Nộp bài
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }

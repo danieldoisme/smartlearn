@@ -1,6 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppLayout from '../components/AppLayout'
+import { motion } from 'framer-motion'
+import {
+  CheckCircle, Target, Flame, Clock, BarChart3, BookOpen, AlertTriangle, Bookmark, StickyNote, TrendingUp,
+} from 'lucide-react'
+import AppLayout from '@/components/AppLayout'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 
 const DAILY = [
   { day: 'T2', count: 45 },
@@ -26,127 +36,191 @@ const WEAK = [
   { name: 'Chương 2 — Lý thuyết đồ thị', accuracy: 38, wrong: 7 },
 ]
 
-const RANGES = ['Tuần này', 'Tháng này', 'Tất cả']
+const STATS = [
+  { label: 'Tổng câu đã học', value: '348', icon: CheckCircle, gradient: 'from-tertiary to-[#4A8885]' },
+  { label: 'Tỷ lệ đúng tổng', value: '76%', icon: Target, gradient: 'from-primary to-primary-light' },
+  { label: 'Chuỗi ngày dài nhất', value: '12 ngày', icon: Flame, gradient: 'from-secondary to-[#6B7A5F]' },
+  { label: 'Tổng thời gian học', value: '14 giờ', icon: Clock, gradient: 'from-primary to-tertiary' },
+]
+
+const stagger = { animate: { transition: { staggerChildren: 0.06 } } }
+const fadeUp = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+}
 
 export default function ProgressPage() {
-  const [range, setRange] = useState('Tuần này')
+  const [range, setRange] = useState('week')
   const navigate = useNavigate()
 
   return (
     <AppLayout>
-      <div className="p-8 max-w-4xl mx-auto">
+      <div className="p-10 max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[#492b17]">Tiến độ học tập của tôi</h1>
-          <div className="flex bg-[#ffeade] rounded-xl p-1 gap-1">
-            {RANGES.map(r => (
-              <button key={r} onClick={() => setRange(r)}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  range === r ? 'bg-white text-[#924c28] shadow-sm' : 'text-[#7b573f]'
-                }`}>{r}</button>
-            ))}
+        <motion.div {...fadeUp} className="flex items-center justify-between mb-10">
+          <div>
+            <h1 className="text-2xl font-bold text-on-surface">Tiến độ học tập</h1>
+            <p className="text-sm text-muted mt-1">Theo dõi quá trình học tập của bạn</p>
           </div>
-        </div>
+          <Tabs value={range} onValueChange={setRange}>
+            <TabsList>
+              <TabsTrigger value="week">Tuần này</TabsTrigger>
+              <TabsTrigger value="month">Tháng này</TabsTrigger>
+              <TabsTrigger value="all">Tất cả</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </motion.div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[
-            { label: 'Tổng câu đã học', value: '348', icon: '✅' },
-            { label: 'Tỷ lệ đúng tổng', value: '76%', icon: '🎯' },
-            { label: 'Chuỗi ngày dài nhất', value: '12 ngày', icon: '🔥' },
-            { label: 'Tổng thời gian học', value: '14 giờ', icon: '⏱️' },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl p-5 border border-[#ffeade] shadow-sm">
-              <div className="text-2xl mb-2">{s.icon}</div>
-              <p className="text-2xl font-bold text-[#492b17]">{s.value}</p>
-              <p className="text-xs text-[#9a7259] mt-1">{s.label}</p>
-            </div>
+        <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
+          {STATS.map(s => (
+            <motion.div key={s.label} variants={fadeUp}>
+              <Card className="hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
+                <CardContent className="p-5">
+                  <div className={cn("inline-flex items-center justify-center w-12 h-12 rounded-xl mb-3 shadow-md bg-gradient-to-br", s.gradient)}>
+                    <s.icon size={20} className="text-white" />
+                  </div>
+                  <p className="text-3xl font-bold text-on-surface tracking-tight">{s.value}</p>
+                  <p className="text-xs text-muted mt-1 font-medium">{s.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {/* Bar chart */}
-        <div className="bg-white rounded-2xl border border-[#ffeade] shadow-sm p-6 mb-6">
-          <h2 className="text-base font-bold text-[#492b17] mb-5">Hoạt động 7 ngày gần đây</h2>
-          <div className="flex items-end gap-3 h-32">
-            {DAILY.map(d => (
-              <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5">
-                <span className="text-xs font-semibold text-[#9a7259]">{d.count}</span>
-                <div className="w-full rounded-t-lg transition-all"
-                  style={{
-                    height: `${(d.count / MAX_COUNT) * 100}px`,
-                    backgroundColor: d.count === MAX_COUNT ? '#4a672e' : '#924c28',
-                    opacity: 0.85,
-                  }} />
-                <span className="text-xs text-[#9a7259]">{d.day}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Doc progress */}
-          <div className="bg-white rounded-2xl border border-[#ffeade] shadow-sm p-6">
-            <h2 className="text-base font-bold text-[#492b17] mb-4">Tiến độ theo tài liệu</h2>
-            <div className="space-y-4">
-              {DOCS.map(d => (
-                <div key={d.title}>
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-sm font-medium text-[#492b17] leading-snug flex-1 mr-2">{d.title}</p>
-                    <span className={`text-xs font-semibold shrink-0 ${d.accuracy >= 75 ? 'text-[#4a672e]' : d.accuracy >= 60 ? 'text-[#7a5a01]' : 'text-[#a73b21]'}`}>
-                      {d.accuracy}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-[#ffeade]">
-                      <div className="h-1.5 rounded-full bg-[#924c28]" style={{ width: `${(d.done / d.chapters) * 100}%` }} />
-                    </div>
-                    <span className="text-xs text-[#9a7259] shrink-0">{d.done}/{d.chapters} chương</span>
-                  </div>
+        <motion.div {...fadeUp}>
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
+                  <BarChart3 size={16} className="text-muted" />
                 </div>
-              ))}
-            </div>
-          </div>
+                Hoạt động 7 ngày gần đây
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end gap-3 h-36">
+                {DAILY.map((d, i) => (
+                  <div key={d.day} className="flex-1 flex flex-col items-center gap-2 group">
+                    <span className="text-xs font-bold text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200">{d.count}</span>
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${(d.count / MAX_COUNT) * 100}%` }}
+                      transition={{ delay: i * 0.08, duration: 0.5, ease: 'easeOut' }}
+                      className="w-full rounded-xl group-hover:scale-x-110 transition-transform duration-200"
+                      style={{
+                        background: d.count === MAX_COUNT
+                          ? 'linear-gradient(to top, #386663, #4A8885)'
+                          : 'linear-gradient(to top, #446732, #5E8B48)',
+                        opacity: 0.75 + (d.count / MAX_COUNT) * 0.25,
+                      }}
+                    />
+                    <span className={cn("text-xs font-medium", d.day === 'T7' ? "text-primary font-bold" : "text-muted")}>{d.day}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div {...fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Doc progress */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
+                  <BookOpen size={16} className="text-muted" />
+                </div>
+                Tiến độ theo tài liệu
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {DOCS.map(d => (
+                  <div key={d.title} className="p-3.5 rounded-xl hover:bg-surface-dim transition-all duration-200 -mx-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <p className="text-sm font-semibold text-on-surface leading-snug truncate">{d.title}</p>
+                        <p className="text-xs text-muted">{d.done}/{d.chapters} chương</p>
+                      </div>
+                      <Badge variant={d.accuracy >= 75 ? 'success' : d.accuracy >= 60 ? 'secondary' : 'destructive'}>
+                        {d.accuracy}%
+                      </Badge>
+                    </div>
+                    <Progress value={(d.done / d.chapters) * 100} />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Weak chapters */}
-          <div className="bg-white rounded-2xl border border-[#ffeade] shadow-sm p-6">
-            <h2 className="text-base font-bold text-[#492b17] mb-4">Điểm yếu cần ôn 💪</h2>
-            <div className="space-y-3">
-              {WEAK.map((w, i) => (
-                <div key={i} className="p-3 rounded-xl bg-[#fff1ea] border border-[#ffeade]">
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="text-sm font-medium text-[#492b17] leading-snug flex-1 mr-2">{w.name}</p>
-                    <span className="text-xs font-bold text-[#a73b21] shrink-0">{w.accuracy}%</span>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-error-container to-[#FFE5E0] flex items-center justify-center">
+                    <AlertTriangle size={16} className="text-error" />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 h-1.5 rounded-full bg-[#ffd0b5] mr-3">
-                      <div className="h-1.5 rounded-full bg-[#a73b21]" style={{ width: `${w.accuracy}%` }} />
+                  Điểm yếu cần ôn
+                </CardTitle>
+                <Badge variant="destructive">{WEAK.length} chương</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {WEAK.map((w, i) => (
+                  <div key={i} className="p-3.5 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
+                    <div className="flex items-start justify-between mb-2.5">
+                      <p className="text-sm font-semibold text-on-surface leading-snug flex-1 mr-2">{w.name}</p>
+                      <Badge variant="destructive">{w.accuracy}%</Badge>
                     </div>
-                    <button onClick={() => navigate('/study')}
-                      className="px-3 py-1 rounded-lg bg-[#924c28] text-white text-xs font-semibold hover:bg-[#7a3e1f] transition-colors shrink-0">
-                      Ôn tập ngay
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <Progress value={w.accuracy} indicatorClassName="bg-error" className="bg-error-container/50" />
+                        <p className="text-[11px] text-error mt-1 font-medium">{w.wrong} câu sai</p>
+                      </div>
+                      <Button size="sm" onClick={() => navigate('/study')}>Ôn tập</Button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Bookmarks */}
-        <div className="bg-white rounded-2xl border border-[#ffeade] shadow-sm p-6">
-          <h2 className="text-base font-bold text-[#492b17] mb-4">Bookmarks & Ghi chú</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {[['🔖','Bookmarks','14 câu đã đánh dấu'],['📝','Ghi chú','8 ghi chú cá nhân']].map(([icon,label,sub]) => (
-              <div key={label} className="flex items-center gap-3 p-4 rounded-xl bg-[#fff1ea] border border-[#ffeade]">
-                <div className="w-10 h-10 rounded-xl bg-[#ffeade] flex items-center justify-center text-xl">{icon}</div>
-                <div>
-                  <p className="text-sm font-semibold text-[#492b17]">{label}</p>
-                  <p className="text-xs text-[#9a7259]">{sub}</p>
+        <motion.div {...fadeUp}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary-container to-primary-container flex items-center justify-center">
+                  <Bookmark size={16} className="text-primary" />
                 </div>
+                Bookmarks & Ghi chú
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { icon: Bookmark, label: 'Bookmarks', sub: '14 câu đã đánh dấu' },
+                  { icon: StickyNote, label: 'Ghi chú', sub: '8 ghi chú cá nhân' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center gap-3.5 p-4 rounded-xl bg-gradient-to-r from-secondary-container/30 to-white border border-outline-variant hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center shadow-sm">
+                      <item.icon size={20} className="text-muted" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-on-surface">{item.label}</p>
+                      <p className="text-xs text-muted">{item.sub}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </AppLayout>
   )

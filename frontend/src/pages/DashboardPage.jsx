@@ -1,11 +1,20 @@
 import { useNavigate } from 'react-router-dom'
-import AppLayout from '../components/AppLayout'
+import { motion } from 'framer-motion'
+import {
+  FileText, CheckCircle, Flame, Trophy, ArrowRight, BookOpen, AlertTriangle,
+} from 'lucide-react'
+import AppLayout from '@/components/AppLayout'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
 
 const STATS = [
-  { label: 'Tài liệu đã tải', value: '12', icon: '📄', color: 'bg-[#ffeade] text-[#924c28]' },
-  { label: 'Câu đã học', value: '348', icon: '✅', color: 'bg-[#d9fcb2] text-[#4a672e]' },
-  { label: 'Chuỗi ngày học', value: '7 🔥', icon: '🗓️', color: 'bg-[#ffdfa0] text-[#7a5a01]' },
-  { label: 'Điểm trung bình', value: '82%', icon: '🏆', color: 'bg-[#ffeade] text-[#924c28]' },
+  { label: 'Tài liệu đã tải', value: '12', icon: FileText, gradient: 'from-primary to-primary-light' },
+  { label: 'Câu đã học', value: '348', icon: CheckCircle, gradient: 'from-tertiary to-[#4A8885]' },
+  { label: 'Chuỗi ngày học', value: '7', icon: Flame, gradient: 'from-secondary to-[#6B7A5F]' },
+  { label: 'Điểm trung bình', value: '82%', icon: Trophy, gradient: 'from-primary to-tertiary' },
 ]
 
 const RECENT_DOCS = [
@@ -20,108 +29,177 @@ const ACTIVITY = [
   { time: 'Hôm qua, 09:00', action: 'Kiểm tra tổng hợp — Toán', score: '75%', ok: false },
 ]
 
+const container = { animate: { transition: { staggerChildren: 0.06 } } }
+const item = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   return (
     <AppLayout>
-      <div className="p-8 max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#492b17]">Xin chào, Đức Thành! 🌱</h1>
-          <p className="text-[#9a7259] mt-1 text-sm capitalize">{today}</p>
-        </div>
+      <div className="py-12 px-10 max-w-5xl mx-auto space-y-16">
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {STATS.map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl p-5 border border-[#ffeade] shadow-sm">
-              <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl text-xl mb-3 ${s.color}`}>
-                {s.icon}
-              </div>
-              <p className="text-2xl font-bold text-[#492b17]">{s.value}</p>
-              <p className="text-xs text-[#9a7259] mt-1">{s.label}</p>
+        {/* ── Hero ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="rounded-2xl px-10 py-12 relative overflow-hidden bg-gradient-to-br from-primary via-primary-light to-tertiary"
+        >
+          <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
+          <div className="absolute -bottom-12 -right-16 w-56 h-56 rounded-full bg-white/5" />
+
+          <div className="relative z-10">
+            <p className="text-white/60 text-sm mb-2 capitalize">{today}</p>
+            <h1 className="text-3xl font-bold text-white mb-3">Xin chào, Đức Thành! 👋</h1>
+            <p className="text-white/70 text-base max-w-lg mb-8 leading-relaxed">
+              Bạn đã duy trì chuỗi <strong className="text-primary-container">7 ngày</strong> liên tục. Hãy tiếp tục hành trình học tập hôm nay!
+            </p>
+            <div className="flex gap-4">
+              <Button onClick={() => navigate('/study')} className="bg-white text-primary hover:bg-primary-container shadow-md">
+                Tiếp tục học <ArrowRight size={16} />
+              </Button>
+              <Button onClick={() => navigate('/upload')} variant="ghost" className="text-white/90 hover:bg-white/15 hover:text-white border border-white/20">
+                Tải tài liệu mới
+              </Button>
             </div>
-          ))}
-        </div>
-
-        {/* Tiếp tục học */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-[#492b17]">Tiếp tục học</h2>
-            <button onClick={() => navigate('/library')}
-              className="text-sm text-[#924c28] font-medium hover:underline">Xem tất cả →</button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        </motion.div>
+
+        {/* ── Stats ── */}
+        <motion.div variants={container} initial="initial" animate="animate" className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {STATS.map((s) => (
+            <motion.div key={s.label} variants={item}>
+              <Card className="hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                <CardContent className="px-6 py-7 pt-7">
+                  <div className={cn("inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 shadow-md bg-gradient-to-br", s.gradient)}>
+                    <s.icon size={20} className="text-white" />
+                  </div>
+                  <p className="text-3xl font-bold text-on-surface tracking-tight">{s.value}</p>
+                  <p className="text-sm text-muted mt-2 font-medium">{s.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* ── Continue Learning ── */}
+        <motion.section variants={container} initial="initial" animate="animate">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-bold text-on-surface">Tiếp tục học</h2>
+              <p className="text-sm text-muted mt-1.5">Nhấn vào tài liệu để tiếp tục từ nơi bạn dừng lại</p>
+            </div>
+            <Button variant="link" onClick={() => navigate('/library')}>
+              Xem tất cả <ArrowRight size={14} />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {RECENT_DOCS.map((doc) => (
-              <div key={doc.title} className="bg-white rounded-2xl p-5 border border-[#ffeade] shadow-sm">
-                <div className="flex items-start justify-between mb-3">
-                  <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-[#ffeade] text-[#924c28]">{doc.topic}</span>
-                  <span className="text-2xl">📄</span>
-                </div>
-                <h3 className="font-semibold text-[#492b17] text-sm mb-1 leading-snug">{doc.title}</h3>
-                <p className="text-xs text-[#9a7259] mb-3">{doc.chapters} chương · {doc.questions} câu hỏi</p>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs text-[#9a7259] mb-1">
-                    <span>Tiến độ</span><span>{doc.progress}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[#ffeade]">
-                    <div className="h-1.5 rounded-full bg-[#924c28] transition-all" style={{ width: `${doc.progress}%` }} />
-                  </div>
-                </div>
-                <button onClick={() => navigate('/study')}
-                  className="w-full py-2 rounded-xl bg-[#924c28] text-white text-xs font-semibold hover:bg-[#7a3e1f] transition-colors">
-                  Tiếp tục
-                </button>
-              </div>
+              <motion.div key={doc.title} variants={item}>
+                <Card
+                  onClick={() => navigate('/study')}
+                  className="cursor-pointer group hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary-light opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardContent className="px-6 py-7 pt-7">
+                    <div className="flex items-start justify-between mb-5">
+                      <Badge>{doc.topic}</Badge>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <BookOpen size={18} className="text-muted" />
+                      </div>
+                    </div>
+                    <h3 className="font-semibold text-on-surface text-sm mb-2 leading-snug group-hover:text-primary transition-colors duration-200">{doc.title}</h3>
+                    <p className="text-xs text-muted mb-6">{doc.chapters} chương · {doc.questions} câu hỏi</p>
+
+                    <div className="mb-6">
+                      <div className="flex justify-between text-xs mb-2">
+                        <span className="text-muted font-medium">Tiến độ</span>
+                        <span className="text-primary font-bold">{doc.progress}%</span>
+                      </div>
+                      <Progress value={doc.progress} />
+                    </div>
+
+                    <Button className="w-full" size="sm">
+                      Tiếp tục <ArrowRight size={14} />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
-        </div>
+        </motion.section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── Bottom Grid ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.4, ease: 'easeOut' }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+        >
           {/* Activity */}
-          <div className="bg-white rounded-2xl p-5 border border-[#ffeade] shadow-sm">
-            <h2 className="text-base font-bold text-[#492b17] mb-4">Hoạt động gần đây</h2>
-            <div className="space-y-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2.5 text-base">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
+                  <BookOpen size={15} className="text-muted" />
+                </div>
+                Hoạt động gần đây
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 space-y-2">
               {ACTIVITY.map((a, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${a.ok ? 'bg-[#4a672e]' : 'bg-[#a73b21]'}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[#492b17] font-medium truncate">{a.action}</p>
-                    <p className="text-xs text-[#9a7259]">{a.time}</p>
+                <div key={i} className="flex gap-4 items-center p-4 rounded-xl hover:bg-surface-dim transition-colors duration-150">
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                    a.ok ? "bg-tertiary-container/60 text-tertiary" : "bg-error-container/60 text-error"
+                  )}>
+                    {a.ok ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0 ${
-                    a.ok ? 'bg-[#d9fcb2] text-[#4a672e]' : 'bg-[#ffeade] text-[#a73b21]'
-                  }`}>{a.score}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-on-surface font-medium truncate">{a.action}</p>
+                    <p className="text-xs text-muted mt-1">{a.time}</p>
+                  </div>
+                  <Badge variant={a.ok ? 'tertiary' : 'destructive'}>{a.score}</Badge>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Ôn tập gợi ý */}
-          <div className="bg-white rounded-2xl p-5 border border-[#ffeade] shadow-sm">
-            <h2 className="text-base font-bold text-[#492b17] mb-4">Gợi ý ôn tập 💡</h2>
-            <div className="space-y-3">
+          {/* Review suggestions */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2.5 text-base">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-container/40 to-tertiary-container/40 flex items-center justify-center">
+                    <AlertTriangle size={15} className="text-primary" />
+                  </div>
+                  Gợi ý ôn tập
+                </CardTitle>
+                <Badge variant="destructive">Cần ôn</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 space-y-3">
               {[
                 { chapter: 'Chương 3 — Chuẩn hoá CSDL', wrong: 5 },
                 { chapter: 'Chương 7 — Hàm trong Python', wrong: 3 },
                 { chapter: 'Chương 2 — Lý thuyết đồ thị', wrong: 7 },
               ].map((r) => (
-                <div key={r.chapter} className="flex items-center justify-between p-3 rounded-xl bg-[#fff1ea] border border-[#ffeade]">
+                <div key={r.chapter} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
                   <div>
-                    <p className="text-sm font-medium text-[#492b17]">{r.chapter}</p>
-                    <p className="text-xs text-[#9a7259]">{r.wrong} câu sai cần ôn</p>
+                    <p className="text-sm font-medium text-on-surface">{r.chapter}</p>
+                    <p className="text-xs text-error font-medium mt-1">{r.wrong} câu sai cần ôn</p>
                   </div>
-                  <button onClick={() => navigate('/study')}
-                    className="px-3 py-1.5 rounded-lg bg-[#924c28] text-white text-xs font-semibold hover:bg-[#7a3e1f] transition-colors">
-                    Ôn ngay
-                  </button>
+                  <Button size="sm" onClick={() => navigate('/study')}>Ôn ngay</Button>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </AppLayout>
   )
