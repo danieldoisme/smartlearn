@@ -172,6 +172,8 @@ export default function StudyPage() {
           {question.questionType === QuestionType.FILL && (
             <div className="space-y-2">
               <input
+                id="answer-input"
+                name="answer-input"
                 type="text"
                 value={fillAnswer}
                 onChange={(e) => setFillAnswer(e.target.value)}

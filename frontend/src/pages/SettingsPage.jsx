@@ -103,16 +103,22 @@ export default function SettingsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
+                    <label htmlFor="fullName" className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
                     <Input
+                      id="fullName"
+                      name="fullName"
+                      autoComplete="name"
                       value={profile.fullName}
                       onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Email</label>
+                    <label htmlFor="email" className="block text-xs font-medium text-slate-600 mb-1.5">Email</label>
                     <Input
+                      id="email"
+                      name="email"
                       type="email"
+                      autoComplete="email"
                       value={profile.email}
                       onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                     />
@@ -143,69 +149,78 @@ export default function SettingsPage() {
         <TabsContent value="password">
           <motion.div variants={item}>
             <Card className="p-6">
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu hiện tại</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                      type={showOldPw ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowOldPw(!showOldPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                    >
-                      {showOldPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+              <CardContent>
+                <form onSubmit={(e) => { e.preventDefault(); handleSave('password') }} className="space-y-4">
+                  <input type="text" name="username" autoComplete="username" value={profile.email} readOnly hidden aria-hidden="true" />
+                  <div>
+                    <label htmlFor="currentPassword" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu hiện tại</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="currentPassword"
+                        name="currentPassword"
+                        type={showOldPw ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        className="pl-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOldPw(!showOldPw)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      >
+                        {showOldPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu mới</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                      type={showNewPw ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPw(!showNewPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                    >
-                      {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                  <div>
+                    <label htmlFor="newPassword" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu mới</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="newPassword"
+                        name="newPassword"
+                        type={showNewPw ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className="pl-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPw(!showNewPw)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      >
+                        {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Xác nhận mật khẩu mới</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input type="password" placeholder="••••••••" className="pl-10" />
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-600 mb-1.5">Xác nhận mật khẩu mới</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" placeholder="••••••••" className="pl-10" />
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <Button onClick={() => handleSave('password')}>
-                    <Save className="h-4 w-4" />
-                    Cập nhật mật khẩu
-                  </Button>
-                  {saved === 'password' && (
-                    <motion.span
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center gap-1.5 text-sm text-emerald-600"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Đổi mật khẩu thành công
-                    </motion.span>
-                  )}
-                </div>
+                  <div className="flex items-center gap-3 pt-2">
+                    <Button type="submit">
+                      <Save className="h-4 w-4" />
+                      Cập nhật mật khẩu
+                    </Button>
+                    {saved === 'password' && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-1.5 text-sm text-emerald-600"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Đổi mật khẩu thành công
+                      </motion.span>
+                    )}
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </motion.div>
@@ -223,11 +238,10 @@ export default function SettingsPage() {
                       <button
                         key={n}
                         onClick={() => setPreferences({ ...preferences, defaultQuestionCount: n })}
-                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-                          preferences.defaultQuestionCount === n
-                            ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                            : 'text-slate-500 border border-slate-200 hover:border-slate-300'
-                        }`}
+                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${preferences.defaultQuestionCount === n
+                          ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                          : 'text-slate-500 border border-slate-200 hover:border-slate-300'
+                          }`}
                       >
                         {n}
                       </button>
@@ -243,11 +257,10 @@ export default function SettingsPage() {
                       <button
                         key={qt.value}
                         onClick={() => setPreferences({ ...preferences, preferredQuestionType: qt.value })}
-                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-                          preferences.preferredQuestionType === qt.value
-                            ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                            : 'text-slate-500 border border-slate-200 hover:border-slate-300'
-                        }`}
+                        className={`px-4 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${preferences.preferredQuestionType === qt.value
+                          ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                          : 'text-slate-500 border border-slate-200 hover:border-slate-300'
+                          }`}
                       >
                         {qt.label}
                       </button>
@@ -263,17 +276,15 @@ export default function SettingsPage() {
                       <button
                         key={dm.value}
                         onClick={() => setPreferences({ ...preferences, answerDisplayMode: dm.value })}
-                        className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all cursor-pointer ${
-                          preferences.answerDisplayMode === dm.value
-                            ? 'bg-primary-50 border border-primary-200 text-primary-800'
-                            : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
-                        }`}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all cursor-pointer ${preferences.answerDisplayMode === dm.value
+                          ? 'bg-primary-50 border border-primary-200 text-primary-800'
+                          : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
+                          }`}
                       >
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                          preferences.answerDisplayMode === dm.value
-                            ? 'border-primary-500'
-                            : 'border-slate-300'
-                        }`}>
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${preferences.answerDisplayMode === dm.value
+                          ? 'border-primary-500'
+                          : 'border-slate-300'
+                          }`}>
                           {preferences.answerDisplayMode === dm.value && (
                             <div className="h-2.5 w-2.5 rounded-full bg-primary-500" />
                           )}

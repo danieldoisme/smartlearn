@@ -168,8 +168,11 @@ export default function ReviewPage() {
       <motion.div variants={item} className="space-y-4">
         {filtered.map((doc) => (
           <Card key={doc.documentTitle} className="overflow-hidden">
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setExpandedDoc(expandedDoc === doc.documentTitle ? null : doc.documentTitle)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedDoc(expandedDoc === doc.documentTitle ? null : doc.documentTitle) } }}
               className="w-full flex items-center gap-4 p-5 text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 shrink-0">
@@ -192,7 +195,7 @@ export default function ReviewPage() {
               ) : (
                 <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
               )}
-            </button>
+            </div>
 
             {expandedDoc === doc.documentTitle && (
               <motion.div
