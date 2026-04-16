@@ -16,16 +16,18 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { mockUser, mockUserPreference } from '@/mocks'
+import { QuestionType, DisplayMode, QuestionTypeLabel, DisplayModeLabel } from '@/models'
 
 const questionTypes = [
-  { value: 'mcq', label: 'Trắc nghiệm' },
-  { value: 'multi', label: 'Chọn nhiều' },
-  { value: 'fill', label: 'Điền từ' },
+  { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
+  { value: QuestionType.MULTI, label: QuestionTypeLabel[QuestionType.MULTI] },
+  { value: QuestionType.FILL, label: QuestionTypeLabel[QuestionType.FILL] },
 ]
 
 const displayModes = [
-  { value: 'immediate', label: 'Hiển thị ngay', desc: 'Xem đáp án ngay sau mỗi câu' },
-  { value: 'end', label: 'Cuối phiên', desc: 'Xem tất cả đáp án sau khi hoàn thành' },
+  { value: DisplayMode.IMMEDIATE, label: DisplayModeLabel[DisplayMode.IMMEDIATE], desc: 'Xem đáp án ngay sau mỗi câu' },
+  { value: DisplayMode.END, label: DisplayModeLabel[DisplayMode.END], desc: 'Xem tất cả đáp án sau khi hoàn thành' },
 ]
 
 const container = {
@@ -39,15 +41,15 @@ const item = {
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState({
-    fullName: 'Đức Thành',
-    email: 'thanh.duc@example.com',
+    fullName: mockUser.fullName,
+    email: mockUser.email,
   })
   const [showOldPw, setShowOldPw] = useState(false)
   const [showNewPw, setShowNewPw] = useState(false)
   const [preferences, setPreferences] = useState({
-    defaultQuestionCount: 10,
-    preferredQuestionType: 'mcq',
-    answerDisplayMode: 'immediate',
+    defaultQuestionCount: mockUserPreference.defaultQuestionCount,
+    preferredQuestionType: mockUserPreference.preferredQuestionType,
+    answerDisplayMode: mockUserPreference.answerDisplayMode,
   })
   const [saved, setSaved] = useState(null)
 
@@ -95,7 +97,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="text-lg font-semibold text-slate-900">{profile.fullName}</p>
                     <p className="text-sm text-slate-500">{profile.email}</p>
-                    <Badge variant="success" className="mt-1">Email đã xác nhận</Badge>
+                    {mockUser.emailVerified && <Badge variant="success" className="mt-1">Email đã xác nhận</Badge>}
                   </div>
                 </div>
 

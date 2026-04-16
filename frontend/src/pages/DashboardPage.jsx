@@ -18,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { mockDocuments, mockTopics, getTopicName } from '@/mocks'
 
 const stats = [
   { label: 'Tài liệu', value: '12', icon: FileText, color: 'text-primary-600', bg: 'bg-primary-50' },
@@ -26,11 +27,13 @@ const stats = [
   { label: 'Chuỗi ngày học', value: '5', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
 ]
 
-const recentDocs = [
-  { id: 1, title: 'Giáo trình Cơ sở dữ liệu', chapters: 8, progress: 65, topic: 'CSDL' },
-  { id: 2, title: 'Lập trình hướng đối tượng', chapters: 12, progress: 40, topic: 'OOP' },
-  { id: 3, title: 'Mạng máy tính', chapters: 6, progress: 90, topic: 'Network' },
-]
+// Recent documents built from Document model + computed progress
+const recentDocs = mockDocuments.slice(0, 3).map((doc, i) => ({
+  ...doc,
+  topicName: getTopicName(doc.topicId),
+  chapterCount: [8, 12, 6][i],
+  progress: [65, 40, 90][i],
+}))
 
 const recentActivity = [
   { type: 'study', desc: 'Hoàn thành Chương 3 — CSDL', time: '2 giờ trước', icon: CheckCircle2, color: 'text-emerald-500' },
@@ -89,7 +92,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-sm font-medium text-slate-800 truncate">{doc.title}</p>
-                      <Badge variant="secondary">{doc.topic}</Badge>
+                      <Badge variant="secondary">{doc.topicName}</Badge>
                     </div>
                     <div className="flex items-center gap-3">
                       <Progress value={doc.progress} className="flex-1 h-1.5" />

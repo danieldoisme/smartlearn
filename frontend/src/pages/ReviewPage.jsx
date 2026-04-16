@@ -17,60 +17,77 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { QuestionType, QuestionTypeLabel } from '@/models'
 
+// Review data: wrong UserAnswers joined with Question + Chapter + Document.
+// In production, this nested view comes from a dedicated API endpoint.
 const mockWrongQuestions = [
   {
-    document: 'Giáo trình Cơ sở dữ liệu',
+    documentTitle: 'Giáo trình Cơ sở dữ liệu',
     chapters: [
       {
+        chapterId: 2,
         title: 'Chương 2: Mô hình quan hệ',
         questions: [
-          { id: 1, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', type: 'mcq', userAnswer: 'A', correctAnswer: 'B', attempts: 1, lastAttempt: '2 ngày trước' },
-          { id: 2, content: 'Ràng buộc NOT NULL thuộc loại nào?', type: 'mcq', userAnswer: 'B', correctAnswer: 'A', attempts: 2, lastAttempt: '3 ngày trước' },
+          { id: 1, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', questionType: QuestionType.MCQ, selectedAnswer: 'A', correctAnswer: 'B', attemptCount: 1, lastAnsweredAt: '2026-04-14T08:00:00Z' },
+          { id: 2, content: 'Ràng buộc NOT NULL thuộc loại nào?', questionType: QuestionType.MCQ, selectedAnswer: 'B', correctAnswer: 'A', attemptCount: 2, lastAnsweredAt: '2026-04-13T08:00:00Z' },
         ],
       },
       {
+        chapterId: 3,
         title: 'Chương 3: Đại số quan hệ',
         questions: [
-          { id: 3, content: 'Phép chia (Division) trong đại số quan hệ dùng để làm gì?', type: 'mcq', userAnswer: 'C', correctAnswer: 'A', attempts: 1, lastAttempt: '1 ngày trước' },
+          { id: 3, content: 'Phép chia (Division) trong đại số quan hệ dùng để làm gì?', questionType: QuestionType.MCQ, selectedAnswer: 'C', correctAnswer: 'A', attemptCount: 1, lastAnsweredAt: '2026-04-15T08:00:00Z' },
         ],
       },
     ],
   },
   {
-    document: 'Lập trình hướng đối tượng',
+    documentTitle: 'Lập trình hướng đối tượng',
     chapters: [
       {
+        chapterId: 9,
         title: 'Chương 3: Kế thừa',
         questions: [
-          { id: 4, content: 'Multiple inheritance gây ra vấn đề gì trong C++?', type: 'mcq', userAnswer: 'A', correctAnswer: 'C', attempts: 1, lastAttempt: '5 ngày trước' },
-          { id: 5, content: 'Abstract class khác Interface ở điểm nào?', type: 'multi', userAnswer: 'A, B', correctAnswer: 'A, C, D', attempts: 3, lastAttempt: '4 ngày trước' },
+          { id: 4, content: 'Multiple inheritance gây ra vấn đề gì trong C++?', questionType: QuestionType.MCQ, selectedAnswer: 'A', correctAnswer: 'C', attemptCount: 1, lastAnsweredAt: '2026-04-11T08:00:00Z' },
+          { id: 5, content: 'Abstract class khác Interface ở điểm nào?', questionType: QuestionType.MULTI, selectedAnswer: 'A, B', correctAnswer: 'A, C, D', attemptCount: 3, lastAnsweredAt: '2026-04-12T08:00:00Z' },
         ],
       },
       {
+        chapterId: 11,
         title: 'Chương 5: Design Patterns',
         questions: [
-          { id: 6, content: 'Singleton pattern đảm bảo điều gì?', type: 'fill', userAnswer: 'một instance', correctAnswer: 'chỉ có một instance duy nhất', attempts: 1, lastAttempt: '6 ngày trước' },
+          { id: 6, content: 'Singleton pattern đảm bảo điều gì?', questionType: QuestionType.FILL, selectedAnswer: 'một instance', correctAnswer: 'chỉ có một instance duy nhất', attemptCount: 1, lastAnsweredAt: '2026-04-10T08:00:00Z' },
         ],
       },
     ],
   },
   {
-    document: 'Mạng máy tính',
+    documentTitle: 'Mạng máy tính',
     chapters: [
       {
+        chapterId: 15,
         title: 'Chương 1: Mô hình OSI',
         questions: [
-          { id: 7, content: 'Tầng nào chịu trách nhiệm định tuyến?', type: 'mcq', userAnswer: 'B', correctAnswer: 'C', attempts: 1, lastAttempt: '1 tuần trước' },
+          { id: 7, content: 'Tầng nào chịu trách nhiệm định tuyến?', questionType: QuestionType.MCQ, selectedAnswer: 'B', correctAnswer: 'C', attemptCount: 1, lastAnsweredAt: '2026-04-09T08:00:00Z' },
         ],
       },
     ],
   },
 ]
 
-const typeLabels = { mcq: 'Trắc nghiệm', multi: 'Chọn nhiều', fill: 'Điền từ' }
-const typeFilters = ['all', 'mcq', 'multi', 'fill']
-const typeFilterLabels = { all: 'Tất cả', mcq: 'Trắc nghiệm', multi: 'Chọn nhiều', fill: 'Điền từ' }
+const typeFilters = ['all', QuestionType.MCQ, QuestionType.MULTI, QuestionType.FILL]
+const typeFilterLabels = { all: 'Tất cả', ...QuestionTypeLabel }
+
+function formatRelativeTime(isoDate) {
+  const diff = Date.now() - new Date(isoDate).getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days === 0) return 'Hôm nay'
+  if (days === 1) return '1 ngày trước'
+  if (days < 7) return `${days} ngày trước`
+  if (days < 14) return '1 tuần trước'
+  return `${Math.floor(days / 7)} tuần trước`
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -83,7 +100,7 @@ const item = {
 
 export default function ReviewPage() {
   const [typeFilter, setTypeFilter] = useState('all')
-  const [expandedDoc, setExpandedDoc] = useState(mockWrongQuestions[0]?.document)
+  const [expandedDoc, setExpandedDoc] = useState(mockWrongQuestions[0]?.documentTitle)
 
   const totalWrong = mockWrongQuestions.reduce(
     (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
@@ -95,7 +112,7 @@ export default function ReviewPage() {
     chapters: doc.chapters
       .map((ch) => ({
         ...ch,
-        questions: ch.questions.filter((q) => typeFilter === 'all' || q.type === typeFilter),
+        questions: ch.questions.filter((q) => typeFilter === 'all' || q.questionType === typeFilter),
       }))
       .filter((ch) => ch.questions.length > 0),
   })).filter((doc) => doc.chapters.length > 0)
@@ -137,11 +154,10 @@ export default function ReviewPage() {
           <button
             key={f}
             onClick={() => setTypeFilter(f)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-              typeFilter === f
-                ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                : 'text-slate-500 border border-slate-200 hover:border-slate-300'
-            }`}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${typeFilter === f
+              ? 'bg-primary-50 text-primary-700 border border-primary-200'
+              : 'text-slate-500 border border-slate-200 hover:border-slate-300'
+              }`}
           >
             {typeFilterLabels[f]}
           </button>
@@ -151,16 +167,16 @@ export default function ReviewPage() {
 
       <motion.div variants={item} className="space-y-4">
         {filtered.map((doc) => (
-          <Card key={doc.document} className="overflow-hidden">
+          <Card key={doc.documentTitle} className="overflow-hidden">
             <button
-              onClick={() => setExpandedDoc(expandedDoc === doc.document ? null : doc.document)}
+              onClick={() => setExpandedDoc(expandedDoc === doc.documentTitle ? null : doc.documentTitle)}
               className="w-full flex items-center gap-4 p-5 text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 shrink-0">
                 <XCircle className="h-5 w-5 text-red-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-slate-800">{doc.document}</h3>
+                <h3 className="text-sm font-semibold text-slate-800">{doc.documentTitle}</h3>
                 <p className="text-xs text-slate-500">
                   {doc.chapters.reduce((s, ch) => s + ch.questions.length, 0)} câu sai · {doc.chapters.length} chương
                 </p>
@@ -171,21 +187,21 @@ export default function ReviewPage() {
                   Ôn tập
                 </Button>
               </Link>
-              {expandedDoc === doc.document ? (
+              {expandedDoc === doc.documentTitle ? (
                 <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
               ) : (
                 <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
               )}
             </button>
 
-            {expandedDoc === doc.document && (
+            {expandedDoc === doc.documentTitle && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="border-t border-slate-100"
               >
                 {doc.chapters.map((ch) => (
-                  <div key={ch.title}>
+                  <div key={ch.chapterId}>
                     <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-50">
                       <FileText className="h-3.5 w-3.5 text-slate-400" />
                       <span className="text-xs font-medium text-slate-600">{ch.title}</span>
@@ -200,12 +216,12 @@ export default function ReviewPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-slate-700 vn-text">{q.content}</p>
                             <div className="flex items-center gap-3 mt-1.5 text-xs">
-                              <Badge variant={q.type === 'mcq' ? 'default' : q.type === 'multi' ? 'info' : 'warning'}>
-                                {typeLabels[q.type]}
+                              <Badge variant={q.questionType === QuestionType.MCQ ? 'default' : q.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
+                                {QuestionTypeLabel[q.questionType]}
                               </Badge>
-                              <span className="text-red-500">Bạn: {q.userAnswer}</span>
+                              <span className="text-red-500">Bạn: {q.selectedAnswer}</span>
                               <span className="text-emerald-600">Đáp án: {q.correctAnswer}</span>
-                              <span className="text-slate-400">Đã thử {q.attempts} lần · {q.lastAttempt}</span>
+                              <span className="text-slate-400">Đã thử {q.attemptCount} lần · {formatRelativeTime(q.lastAnsweredAt)}</span>
                             </div>
                           </div>
                         </div>

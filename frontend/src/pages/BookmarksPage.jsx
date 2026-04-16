@@ -24,27 +24,58 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { mockBookmarks, mockNotes, mockStudyQuestions, mockExamQuestions, mockChapters, mockDocuments, getTopicName } from '@/mocks'
 
-const mockBookmarks = {
-  questions: [
-    { id: 1, content: 'Khóa chính (Primary Key) có đặc điểm nào?', document: 'Giáo trình CSDL', chapter: 'Chương 2', createdAt: '2 ngày trước' },
-    { id: 2, content: 'Phép toán nào kết hợp hai quan hệ dựa trên điều kiện?', document: 'Giáo trình CSDL', chapter: 'Chương 3', createdAt: '3 ngày trước' },
-    { id: 3, content: 'Tính chất ACID trong giao dịch CSDL gồm những gì?', document: 'Giáo trình CSDL', chapter: 'Chương 7', createdAt: '5 ngày trước' },
-    { id: 4, content: 'Đa hình (Polymorphism) trong OOP là gì?', document: 'Lập trình OOP', chapter: 'Chương 4', createdAt: '1 tuần trước' },
-  ],
-  pages: [
-    { id: 1, document: 'Giáo trình CSDL', chapter: 'Chương 3: Đại số quan hệ', pageNumber: 52, createdAt: '1 ngày trước' },
-    { id: 2, document: 'Mạng máy tính', chapter: 'Chương 2: Mô hình OSI', pageNumber: 28, createdAt: '4 ngày trước' },
-    { id: 3, document: 'Lập trình OOP', chapter: 'Chương 5: Design Patterns', pageNumber: 89, createdAt: '1 tuần trước' },
-  ],
+// Build view data from normalized Bookmark + Question + Chapter + Document models
+const allQuestions = [...mockStudyQuestions, ...mockExamQuestions]
+
+const questionBookmarks = mockBookmarks
+  .filter((bm) => bm.questionId !== null)
+  .map((bm) => {
+    const question = allQuestions.find((q) => q.id === bm.questionId)
+    const chapter = mockChapters.find((ch) => ch.id === bm.chapterId || ch.id === question?.chapterId)
+    const doc = mockDocuments.find((d) => d.id === chapter?.documentId)
+    return {
+      ...bm,
+      questionContent: question?.content ?? '',
+      documentTitle: doc?.title ?? '',
+      chapterTitle: chapter?.title ?? '',
+    }
+  })
+
+const pageBookmarks = mockBookmarks
+  .filter((bm) => bm.questionId === null && bm.pageNumber !== null)
+  .map((bm) => {
+    // Page bookmarks reference a page number; resolve document via chapter or direct association
+    const doc = mockDocuments[0] // simplified for mock
+    return {
+      ...bm,
+      documentTitle: doc?.title ?? '',
+      chapterTitle: 'Chương liên quan',
+    }
+  })
+
+const enrichedNotes = mockNotes.map((note) => {
+  const question = allQuestions.find((q) => q.id === note.questionId)
+  const bookmark = mockBookmarks.find((bm) => bm.id === note.bookmarkId)
+  const doc = mockDocuments[0] // simplified for mock
+  return {
+    ...note,
+    questionContent: question?.content ?? null,
+    documentTitle: doc?.title ?? '',
+    pageNumber: bookmark?.pageNumber ?? null,
+  }
+})
+
+function formatRelativeTime(isoDate) {
+  const diff = Date.now() - new Date(isoDate).getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days === 0) return 'Hôm nay'
+  if (days === 1) return '1 ngày trước'
+  if (days < 7) return `${days} ngày trước`
+  if (days < 14) return '1 tuần trước'
+  return `${Math.floor(days / 7)} tuần trước`
 }
-
-const mockNotes = [
-  { id: 1, content: 'Khóa chính không được NULL và giá trị phải duy nhất. Cần nhớ phân biệt với khóa ứng viên.', questionContent: 'Khóa chính (Primary Key) có đặc điểm nào?', document: 'Giáo trình CSDL', createdAt: '2 ngày trước', updatedAt: '1 ngày trước' },
-  { id: 2, content: 'ACID = Atomicity + Consistency + Isolation + Durability. Distribution KHÔNG phải tính chất ACID.', questionContent: 'Tính chất ACID trong giao dịch CSDL', document: 'Giáo trình CSDL', createdAt: '5 ngày trước', updatedAt: '5 ngày trước' },
-  { id: 3, content: 'Phép kết tự nhiên (Natural Join) tự động ghép theo các thuộc tính cùng tên.', questionContent: null, document: 'Giáo trình CSDL', page: 52, createdAt: '1 ngày trước', updatedAt: '1 ngày trước' },
-  { id: 4, content: 'Polymorphism: cùng 1 phương thức, hành vi khác nhau tùy đối tượng. Ví dụ: draw() cho Circle vs Rectangle.', questionContent: 'Đa hình (Polymorphism) trong OOP là gì?', document: 'Lập trình OOP', createdAt: '1 tuần trước', updatedAt: '6 ngày trước' },
-]
 
 const container = {
   hidden: { opacity: 0 },
@@ -81,32 +112,32 @@ export default function BookmarksPage() {
         <TabsList>
           <TabsTrigger value="questions">
             <HelpCircle className="h-4 w-4" />
-            Câu hỏi ({mockBookmarks.questions.length})
+            Câu hỏi ({questionBookmarks.length})
           </TabsTrigger>
           <TabsTrigger value="pages">
             <Bookmark className="h-4 w-4" />
-            Trang ({mockBookmarks.pages.length})
+            Trang ({pageBookmarks.length})
           </TabsTrigger>
           <TabsTrigger value="notes">
             <StickyNote className="h-4 w-4" />
-            Ghi chú ({mockNotes.length})
+            Ghi chú ({enrichedNotes.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="questions">
           <motion.div variants={itemAnim} className="space-y-2">
-            {mockBookmarks.questions.map((bm) => (
+            {questionBookmarks.map((bm) => (
               <Card key={bm.id} className="p-4 group">
                 <CardContent className="flex items-start gap-4">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 shrink-0 mt-0.5">
                     <HelpCircle className="h-4 w-4 text-primary-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 vn-text">{bm.content}</p>
+                    <p className="text-sm font-medium text-slate-800 vn-text">{bm.questionContent}</p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <Badge variant="secondary">{bm.document}</Badge>
-                      <span className="text-xs text-slate-400">{bm.chapter}</span>
-                      <span className="text-xs text-slate-400">· {bm.createdAt}</span>
+                      <Badge variant="secondary">{bm.documentTitle}</Badge>
+                      <span className="text-xs text-slate-400">{bm.chapterTitle}</span>
+                      <span className="text-xs text-slate-400">· {formatRelativeTime(bm.createdAt)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -130,18 +161,18 @@ export default function BookmarksPage() {
 
         <TabsContent value="pages">
           <motion.div variants={itemAnim} className="space-y-2">
-            {mockBookmarks.pages.map((bm) => (
+            {pageBookmarks.map((bm) => (
               <Card key={bm.id} className="p-4 group">
                 <CardContent className="flex items-center gap-4">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 shrink-0">
                     <FileText className="h-4 w-4 text-amber-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800">{bm.document}</p>
+                    <p className="text-sm font-medium text-slate-800">{bm.documentTitle}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-500">{bm.chapter}</span>
+                      <span className="text-xs text-slate-500">{bm.chapterTitle}</span>
                       <Badge variant="secondary">Trang {bm.pageNumber}</Badge>
-                      <span className="text-xs text-slate-400">· {bm.createdAt}</span>
+                      <span className="text-xs text-slate-400">· {formatRelativeTime(bm.createdAt)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -165,7 +196,7 @@ export default function BookmarksPage() {
 
         <TabsContent value="notes">
           <motion.div variants={itemAnim} className="space-y-2">
-            {mockNotes.map((note) => (
+            {enrichedNotes.map((note) => (
               <Card key={note.id} className="p-4 group">
                 <CardContent>
                   <div className="flex items-start gap-4">
@@ -196,13 +227,13 @@ export default function BookmarksPage() {
                         <>
                           <p className="text-sm text-slate-700 vn-text leading-relaxed">{note.content}</p>
                           <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="secondary">{note.document}</Badge>
+                            <Badge variant="secondary">{note.documentTitle}</Badge>
                             {note.questionContent ? (
                               <span className="text-xs text-slate-400 truncate max-w-[200px]">{note.questionContent}</span>
-                            ) : (
-                              <span className="text-xs text-slate-400">Trang {note.page}</span>
-                            )}
-                            <span className="text-xs text-slate-400">· {note.updatedAt}</span>
+                            ) : note.pageNumber ? (
+                              <span className="text-xs text-slate-400">Trang {note.pageNumber}</span>
+                            ) : null}
+                            <span className="text-xs text-slate-400">· {formatRelativeTime(note.updatedAt)}</span>
                           </div>
                         </>
                       )}
@@ -230,7 +261,7 @@ export default function BookmarksPage() {
         </TabsContent>
       </Tabs>
 
-      {mockBookmarks.questions.length === 0 && mockBookmarks.pages.length === 0 && mockNotes.length === 0 && (
+      {questionBookmarks.length === 0 && pageBookmarks.length === 0 && enrichedNotes.length === 0 && (
         <div className="text-center py-16">
           <Bookmark className="h-12 w-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500">Chưa có bookmark hay ghi chú nào</p>

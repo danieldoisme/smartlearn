@@ -22,49 +22,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-
-const examQuestions = [
-  { id: 1, content: 'Trong SQL, lệnh nào dùng để tạo bảng mới?', options: [
-    { label: 'A', content: 'INSERT TABLE' }, { label: 'B', content: 'CREATE TABLE' },
-    { label: 'C', content: 'NEW TABLE' }, { label: 'D', content: 'ADD TABLE' },
-  ]},
-  { id: 2, content: 'Khóa ngoại (Foreign Key) dùng để làm gì?', options: [
-    { label: 'A', content: 'Mã hóa dữ liệu' }, { label: 'B', content: 'Tạo chỉ mục' },
-    { label: 'C', content: 'Liên kết hai bảng' }, { label: 'D', content: 'Xóa dữ liệu' },
-  ]},
-  { id: 3, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', options: [
-    { label: 'A', content: 'Không có phụ thuộc bắc cầu' }, { label: 'B', content: 'Mỗi ô chứa giá trị nguyên tử' },
-    { label: 'C', content: 'Phải có khóa ngoại' }, { label: 'D', content: 'Tối thiểu 3 cột' },
-  ]},
-  { id: 4, content: 'Lệnh SQL nào dùng để xóa tất cả dữ liệu nhưng giữ cấu trúc bảng?', options: [
-    { label: 'A', content: 'DELETE TABLE' }, { label: 'B', content: 'DROP TABLE' },
-    { label: 'C', content: 'TRUNCATE TABLE' }, { label: 'D', content: 'REMOVE TABLE' },
-  ]},
-  { id: 5, content: 'Phép toán nào trả về các bộ có mặt ở cả hai quan hệ?', options: [
-    { label: 'A', content: 'Phép hợp (Union)' }, { label: 'B', content: 'Phép giao (Intersect)' },
-    { label: 'C', content: 'Phép trừ (Except)' }, { label: 'D', content: 'Phép chia (Division)' },
-  ]},
-  { id: 6, content: 'Chỉ mục (Index) trong CSDL giúp tối ưu thao tác nào?', options: [
-    { label: 'A', content: 'INSERT' }, { label: 'B', content: 'UPDATE' },
-    { label: 'C', content: 'SELECT' }, { label: 'D', content: 'DELETE' },
-  ]},
-  { id: 7, content: 'Ràng buộc NOT NULL thuộc loại ràng buộc nào?', options: [
-    { label: 'A', content: 'Ràng buộc miền' }, { label: 'B', content: 'Ràng buộc khóa' },
-    { label: 'C', content: 'Ràng buộc tham chiếu' }, { label: 'D', content: 'Ràng buộc bảng' },
-  ]},
-  { id: 8, content: 'Trigger là gì?', options: [
-    { label: 'A', content: 'Thủ tục lưu trữ thông thường' }, { label: 'B', content: 'Chương trình tự động khi có sự kiện' },
-    { label: 'C', content: 'Lệnh tạo bảng' }, { label: 'D', content: 'Kiểu dữ liệu đặc biệt' },
-  ]},
-  { id: 9, content: 'VIEW trong SQL là gì?', options: [
-    { label: 'A', content: 'Bảng vật lý' }, { label: 'B', content: 'Bảng ảo dựa trên câu truy vấn' },
-    { label: 'C', content: 'Kiểu dữ liệu' }, { label: 'D', content: 'Chỉ mục đặc biệt' },
-  ]},
-  { id: 10, content: 'Deadlock xảy ra khi nào?', options: [
-    { label: 'A', content: 'Bảng bị xóa' }, { label: 'B', content: 'Hai giao dịch chờ nhau mãi' },
-    { label: 'C', content: 'Server tắt' }, { label: 'D', content: 'Ổ đĩa đầy' },
-  ]},
-]
+import { mockExamQuestions } from '@/mocks'
 
 export default function ExamPage() {
   const navigate = useNavigate()
@@ -96,7 +54,7 @@ export default function ExamPage() {
   }, [])
 
   const answeredCount = Object.keys(answers).length
-  const question = examQuestions[currentQ]
+  const question = mockExamQuestions[currentQ]
   const isLowTime = timeLeft < 300
 
   const handleSubmit = () => {
@@ -150,7 +108,7 @@ export default function ExamPage() {
               <Card className="p-6">
                 <CardContent className="space-y-5">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Câu {currentQ + 1}/{examQuestions.length}</Badge>
+                    <Badge variant="secondary">Câu {currentQ + 1}/{mockExamQuestions.length}</Badge>
                     {answers[question.id] && <Badge variant="success">Đã trả lời</Badge>}
                   </div>
 
@@ -187,8 +145,8 @@ export default function ExamPage() {
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => setCurrentQ(Math.min(examQuestions.length - 1, currentQ + 1))}
-                  disabled={currentQ === examQuestions.length - 1}
+                  onClick={() => setCurrentQ(Math.min(mockExamQuestions.length - 1, currentQ + 1))}
+                  disabled={currentQ === mockExamQuestions.length - 1}
                 >
                   Câu sau <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -202,7 +160,7 @@ export default function ExamPage() {
             <CardContent>
               <p className="text-xs text-slate-500 mb-3">Điều hướng câu hỏi</p>
               <div className="grid grid-cols-5 gap-1.5">
-                {examQuestions.map((q, i) => (
+                {mockExamQuestions.map((q, i) => (
                   <button
                     key={q.id}
                     onClick={() => setCurrentQ(i)}
@@ -225,9 +183,9 @@ export default function ExamPage() {
             <CardContent className="space-y-3">
               <div className="flex justify-between text-xs text-slate-500">
                 <span>Tiến độ</span>
-                <span>{answeredCount}/{examQuestions.length}</span>
+                <span>{answeredCount}/{mockExamQuestions.length}</span>
               </div>
-              <Progress value={(answeredCount / examQuestions.length) * 100} />
+              <Progress value={(answeredCount / mockExamQuestions.length) * 100} />
               <Button
                 className="w-full"
                 onClick={() => setShowSubmitDialog(true)}
@@ -245,10 +203,10 @@ export default function ExamPage() {
           <DialogHeader>
             <DialogTitle>Nộp bài kiểm tra</DialogTitle>
             <DialogDescription>
-              {answeredCount < examQuestions.length ? (
+              {answeredCount < mockExamQuestions.length ? (
                 <span className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Bạn còn {examQuestions.length - answeredCount} câu chưa trả lời.
+                  Bạn còn {mockExamQuestions.length - answeredCount} câu chưa trả lời.
                 </span>
               ) : (
                 'Bạn đã trả lời tất cả câu hỏi. Xác nhận nộp bài?'

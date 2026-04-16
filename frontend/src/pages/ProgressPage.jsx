@@ -22,7 +22,9 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { mockDocuments, getTopicName } from '@/mocks'
 
+// Aggregated stats — in production these come from dedicated API endpoints
 const weeklyData = [
   { day: 'T2', questions: 24, correct: 18 },
   { day: 'T3', questions: 32, correct: 25 },
@@ -42,13 +44,17 @@ const accuracyTrend = [
   { week: 'Tuần 6', accuracy: 76 },
 ]
 
-const documentProgress = [
-  { id: 1, title: 'Giáo trình Cơ sở dữ liệu', chapters: 8, chaptersCompleted: 5, questions: 64, answered: 48, accuracy: 78, lastStudied: '2 giờ trước' },
-  { id: 2, title: 'Lập trình hướng đối tượng', chapters: 12, chaptersCompleted: 5, questions: 120, answered: 52, accuracy: 65, lastStudied: '1 ngày trước' },
-  { id: 3, title: 'Mạng máy tính', chapters: 6, chaptersCompleted: 5, questions: 48, answered: 44, accuracy: 82, lastStudied: '3 ngày trước' },
-  { id: 4, title: 'Cấu trúc dữ liệu và giải thuật', chapters: 10, chaptersCompleted: 2, questions: 85, answered: 18, accuracy: 61, lastStudied: '5 ngày trước' },
-  { id: 5, title: 'Trí tuệ nhân tạo', chapters: 7, chaptersCompleted: 4, questions: 56, answered: 35, accuracy: 71, lastStudied: '1 tuần trước' },
-]
+// Enriched document progress built from Document model + computed study stats
+const documentProgress = mockDocuments.slice(0, 5).map((doc, i) => {
+  const stats = [
+    { chapterCount: 8, chaptersCompleted: 5, questionCount: 64, answeredCount: 48, accuracy: 78, lastStudied: '2 giờ trước' },
+    { chapterCount: 12, chaptersCompleted: 5, questionCount: 120, answeredCount: 52, accuracy: 65, lastStudied: '1 ngày trước' },
+    { chapterCount: 6, chaptersCompleted: 5, questionCount: 48, answeredCount: 44, accuracy: 82, lastStudied: '3 ngày trước' },
+    { chapterCount: 10, chaptersCompleted: 2, questionCount: 85, answeredCount: 18, accuracy: 61, lastStudied: '5 ngày trước' },
+    { chapterCount: 7, chaptersCompleted: 4, questionCount: 56, answeredCount: 35, accuracy: 71, lastStudied: '1 tuần trước' },
+  ][i]
+  return { ...doc, ...stats }
+})
 
 const overviewStats = [
   { label: 'Tài liệu đã học', value: '5/6', icon: BookOpen, color: 'text-primary-600', bg: 'bg-primary-50' },
@@ -173,15 +179,15 @@ export default function ProgressPage() {
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Chương</p>
                           <div className="flex items-center gap-2">
-                            <Progress value={(doc.chaptersCompleted / doc.chapters) * 100} className="flex-1 h-1.5" />
-                            <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapters}</span>
+                            <Progress value={(doc.chaptersCompleted / doc.chapterCount) * 100} className="flex-1 h-1.5" />
+                            <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapterCount}</span>
                           </div>
                         </div>
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Câu hỏi</p>
                           <div className="flex items-center gap-2">
-                            <Progress value={(doc.answered / doc.questions) * 100} className="flex-1 h-1.5" />
-                            <span className="text-xs text-slate-600">{doc.answered}/{doc.questions}</span>
+                            <Progress value={(doc.answeredCount / doc.questionCount) * 100} className="flex-1 h-1.5" />
+                            <span className="text-xs text-slate-600">{doc.answeredCount}/{doc.questionCount}</span>
                           </div>
                         </div>
                         <div>

@@ -26,17 +26,21 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { mockDocuments, mockTopics, mockChapters, getTopicName, formatFileSize } from '@/mocks'
 
-const mockDocuments = [
-  { id: 1, title: 'Giáo trình Cơ sở dữ liệu', topic: 'CSDL', fileType: 'pdf', chapters: 8, questions: 64, progress: 65, fileSize: '4.2 MB', createdAt: '12/03/2026' },
-  { id: 2, title: 'Lập trình hướng đối tượng', topic: 'OOP', fileType: 'pdf', chapters: 12, questions: 120, progress: 40, fileSize: '6.8 MB', createdAt: '08/03/2026' },
-  { id: 3, title: 'Mạng máy tính', topic: 'Network', fileType: 'docx', chapters: 6, questions: 48, progress: 90, fileSize: '3.1 MB', createdAt: '05/03/2026' },
-  { id: 4, title: 'Cấu trúc dữ liệu và giải thuật', topic: 'DSA', fileType: 'pdf', chapters: 10, questions: 85, progress: 20, fileSize: '5.5 MB', createdAt: '01/03/2026' },
-  { id: 5, title: 'Hệ điều hành', topic: 'OS', fileType: 'pdf', chapters: 9, questions: 72, progress: 0, fileSize: '7.2 MB', createdAt: '25/02/2026' },
-  { id: 6, title: 'Trí tuệ nhân tạo', topic: 'AI', fileType: 'pdf', chapters: 7, questions: 56, progress: 55, fileSize: '4.9 MB', createdAt: '20/02/2026' },
-]
+// Enrich documents with computed view fields (would come from API in production)
+const documents = mockDocuments.map((doc) => {
+  const chapters = mockChapters.filter((ch) => ch.documentId === doc.id)
+  return {
+    ...doc,
+    topicName: getTopicName(doc.topicId),
+    chapterCount: chapters.length || [8, 12, 6, 10, 9, 7][doc.id - 1] || 0,
+    questionCount: [64, 120, 48, 85, 72, 56][doc.id - 1] || 0,
+    progress: [65, 40, 90, 20, 0, 55][doc.id - 1] || 0,
+  }
+})
 
-const topics = ['Tất cả', 'CSDL', 'OOP', 'Network', 'DSA', 'OS', 'AI']
+const topicFilters = ['Tất cả', ...mockTopics.map((t) => t.name)]
 
 const container = {
   hidden: { opacity: 0 },
@@ -54,9 +58,9 @@ export default function LibraryPage() {
   const [deleteDoc, setDeleteDoc] = useState(null)
   const [menuOpen, setMenuOpen] = useState(null)
 
-  const filtered = mockDocuments.filter((doc) => {
+  const filtered = documents.filter((doc) => {
     const matchSearch = doc.title.toLowerCase().includes(search.toLowerCase())
-    const matchTopic = activeTopic === 'Tất cả' || doc.topic === activeTopic
+    const matchTopic = activeTopic === 'Tất cả' || doc.topicName === activeTopic
     return matchSearch && matchTopic
   })
 
@@ -65,7 +69,7 @@ export default function LibraryPage() {
       <motion.div variants={item} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Thư viện tài liệu</h1>
-          <p className="text-slate-500 text-sm mt-1">{mockDocuments.length} tài liệu</p>
+          <p className="text-slate-500 text-sm mt-1">{documents.length} tài liệu</p>
         </div>
         <Link to="/upload">
           <Button>
@@ -104,7 +108,7 @@ export default function LibraryPage() {
       </motion.div>
 
       <motion.div variants={item} className="flex gap-2 flex-wrap">
-        {topics.map((t) => (
+        {topicFilters.map((t) => (
           <button
             key={t}
             onClick={() => setActiveTopic(t)}
@@ -153,13 +157,13 @@ export default function LibraryPage() {
 
                 <h3 className="text-sm font-semibold text-slate-800 mb-1 line-clamp-2">{doc.title}</h3>
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="secondary">{doc.topic}</Badge>
+                  <Badge variant="secondary">{doc.topicName}</Badge>
                   <span className="text-xs text-slate-400">{doc.fileType.toUpperCase()}</span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
-                  <span>{doc.chapters} chương</span>
-                  <span>{doc.questions} câu hỏi</span>
+                  <span>{doc.chapterCount} chương</span>
+                  <span>{doc.questionCount} câu hỏi</span>
                 </div>
 
                 <div className="flex items-center gap-2 mb-4">
@@ -187,9 +191,9 @@ export default function LibraryPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-800 truncate">{doc.title}</p>
-                  <p className="text-xs text-slate-400">{doc.chapters} chương · {doc.questions} câu hỏi · {doc.fileSize}</p>
+                  <p className="text-xs text-slate-400">{doc.chapterCount} chương · {doc.questionCount} câu hỏi · {formatFileSize(doc.fileSize)}</p>
                 </div>
-                <Badge variant="secondary">{doc.topic}</Badge>
+                <Badge variant="secondary">{doc.topicName}</Badge>
                 <div className="flex items-center gap-2 w-32">
                   <Progress value={doc.progress} className="flex-1 h-1.5" />
                   <span className="text-xs text-slate-500">{doc.progress}%</span>
@@ -217,7 +221,7 @@ export default function LibraryPage() {
           <DialogHeader>
             <DialogTitle>Xóa tài liệu</DialogTitle>
             <DialogDescription>
-              Tài liệu &quot;{deleteDoc?.title}&quot; có {deleteDoc?.questions} câu hỏi liên kết.
+              Tài liệu &quot;{deleteDoc?.title}&quot; có {deleteDoc?.questionCount} câu hỏi liên kết.
               Xóa tài liệu sẽ xóa toàn bộ câu hỏi đi kèm.
             </DialogDescription>
           </DialogHeader>

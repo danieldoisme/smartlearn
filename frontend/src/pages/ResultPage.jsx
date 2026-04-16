@@ -15,31 +15,35 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { mockExam, mockExamResults, mockExamQuestions } from '@/mocks'
 
-const mockResult = {
-  totalQuestions: 10,
-  correct: 7,
-  wrong: 2,
-  skipped: 1,
-  score: 70,
+// Build result view by joining Exam + ExamQuestion + Question models
+const examResult = {
+  ...mockExam,
+  correct: mockExamResults.filter((eq) => eq.isCorrect).length,
+  wrong: mockExamResults.filter((eq) => !eq.isCorrect && eq.selectedAnswer !== null).length,
+  skipped: mockExamResults.filter((eq) => eq.selectedAnswer === null).length,
   timeTaken: '18:42',
-  questions: [
-    { id: 1, content: 'Trong SQL, lệnh nào dùng để tạo bảng mới?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 23' },
-    { id: 2, content: 'Khóa ngoại (Foreign Key) dùng để làm gì?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 31' },
-    { id: 3, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', userAnswer: 'A', correctAnswer: 'B', isCorrect: false, source: 'Trang 56' },
-    { id: 4, content: 'Lệnh SQL nào dùng để xóa tất cả dữ liệu nhưng giữ cấu trúc?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 40' },
-    { id: 5, content: 'Phép toán nào trả về các bộ có mặt ở cả hai quan hệ?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 48' },
-    { id: 6, content: 'Chỉ mục (Index) tối ưu thao tác nào?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 89' },
-    { id: 7, content: 'Ràng buộc NOT NULL thuộc loại nào?', userAnswer: 'B', correctAnswer: 'A', isCorrect: false, source: 'Trang 35' },
-    { id: 8, content: 'Trigger là gì?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 112' },
-    { id: 9, content: 'VIEW trong SQL là gì?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 95' },
-    { id: 10, content: 'Deadlock xảy ra khi nào?', userAnswer: null, correctAnswer: 'B', isCorrect: false, skipped: true, source: 'Trang 130' },
-  ],
+  questions: mockExamResults.map((eq) => {
+    const question = mockExamQuestions.find((q) => q.id === eq.questionId)
+    const correctOption = question?.options.find((o) => o.isCorrect)
+    return {
+      id: eq.id,
+      questionId: eq.questionId,
+      orderIndex: eq.orderIndex,
+      content: question?.content ?? '',
+      selectedAnswer: eq.selectedAnswer,
+      correctAnswer: correctOption?.label ?? '',
+      isCorrect: eq.isCorrect,
+      isSkipped: eq.selectedAnswer === null,
+      sourcePage: question?.sourcePage ?? null,
+    }
+  }),
 }
 
 export default function ResultPage() {
   const [expandedQ, setExpandedQ] = useState(null)
-  const { totalQuestions, correct, wrong, skipped, score, timeTaken, questions } = mockResult
+  const { totalQuestions, correct, wrong, skipped, score, timeTaken, questions } = examResult
 
   const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
   const scoreBg = score >= 80 ? 'from-emerald-50' : score >= 60 ? 'from-amber-50' : 'from-red-50'
@@ -111,19 +115,18 @@ export default function ResultPage() {
                   onClick={() => setExpandedQ(expandedQ === q.id ? null : q.id)}
                   className="w-full flex items-center gap-3 text-left cursor-pointer"
                 >
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${
-                    q.isCorrect
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${q.isCorrect
                       ? 'bg-emerald-50 text-emerald-600'
-                      : q.skipped
+                      : q.isSkipped
                         ? 'bg-slate-100 text-slate-400'
                         : 'bg-red-50 text-red-600'
-                  }`}>
+                    }`}>
                     {i + 1}
                   </span>
                   <span className="flex-1 text-sm text-slate-700 vn-text">{q.content}</span>
                   {q.isCorrect ? (
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                  ) : q.skipped ? (
+                  ) : q.isSkipped ? (
                     <SkipForward className="h-4 w-4 text-slate-400 shrink-0" />
                   ) : (
                     <XCircle className="h-4 w-4 text-red-500 shrink-0" />
@@ -140,16 +143,18 @@ export default function ResultPage() {
                     animate={{ opacity: 1 }}
                     className="mt-3 ml-10 space-y-2 text-sm"
                   >
-                    {!q.skipped && (
+                    {!q.isSkipped && (
                       <p className={q.isCorrect ? 'text-emerald-600' : 'text-red-600'}>
-                        Bạn chọn: {q.userAnswer} {q.isCorrect ? '✓' : `✗ (Đáp án đúng: ${q.correctAnswer})`}
+                        Bạn chọn: {q.selectedAnswer} {q.isCorrect ? '✓' : `✗ (Đáp án đúng: ${q.correctAnswer})`}
                       </p>
                     )}
-                    {q.skipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                      <FileText className="h-3 w-3" />
-                      <span>{q.source}</span>
-                    </div>
+                    {q.isSkipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
+                    {q.sourcePage && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <FileText className="h-3 w-3" />
+                        <span>Trang {q.sourcePage}</span>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </CardContent>

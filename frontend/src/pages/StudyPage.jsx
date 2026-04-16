@@ -17,57 +17,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-
-const mockQuestions = [
-  {
-    id: 1,
-    type: 'mcq',
-    content: 'Trong mô hình quan hệ, khóa chính (Primary Key) có đặc điểm nào sau đây?',
-    options: [
-      { label: 'A', content: 'Có thể chứa giá trị NULL', isCorrect: false },
-      { label: 'B', content: 'Giá trị phải là duy nhất và không NULL', isCorrect: true },
-      { label: 'C', content: 'Mỗi bảng có thể có nhiều khóa chính', isCorrect: false },
-      { label: 'D', content: 'Khóa chính luôn là kiểu số nguyên', isCorrect: false },
-    ],
-    sourceText: 'Khóa chính (Primary Key) là một hoặc tập hợp các thuộc tính mà giá trị của nó xác định duy nhất mỗi bộ trong quan hệ. Khóa chính không được chứa giá trị NULL.',
-    sourcePage: 45,
-  },
-  {
-    id: 2,
-    type: 'mcq',
-    content: 'Phép toán nào trong đại số quan hệ dùng để kết hợp các bộ từ hai quan hệ dựa trên điều kiện?',
-    options: [
-      { label: 'A', content: 'Phép chiếu (Projection)', isCorrect: false },
-      { label: 'B', content: 'Phép chọn (Selection)', isCorrect: false },
-      { label: 'C', content: 'Phép kết (Join)', isCorrect: true },
-      { label: 'D', content: 'Phép hợp (Union)', isCorrect: false },
-    ],
-    sourceText: 'Phép kết (Join) là phép toán kết hợp các bộ từ hai quan hệ thành một quan hệ mới, dựa trên một điều kiện kết nối giữa các thuộc tính.',
-    sourcePage: 52,
-  },
-  {
-    id: 3,
-    type: 'fill',
-    content: 'Chuẩn hóa cơ sở dữ liệu đến dạng chuẩn 3NF nhằm loại bỏ phụ thuộc _______.',
-    correctAnswer: 'bắc cầu',
-    sourceText: 'Dạng chuẩn 3 (3NF) yêu cầu quan hệ phải ở 2NF và không có thuộc tính không khóa nào phụ thuộc bắc cầu vào khóa chính.',
-    sourcePage: 78,
-  },
-  {
-    id: 4,
-    type: 'multi',
-    content: 'Chọn các đặc tính của giao dịch (Transaction) trong CSDL — tính chất ACID:',
-    options: [
-      { label: 'A', content: 'Atomicity (Tính nguyên tử)', isCorrect: true },
-      { label: 'B', content: 'Consistency (Tính nhất quán)', isCorrect: true },
-      { label: 'C', content: 'Isolation (Tính cô lập)', isCorrect: true },
-      { label: 'D', content: 'Distribution (Tính phân tán)', isCorrect: false },
-      { label: 'E', content: 'Durability (Tính bền vững)', isCorrect: true },
-    ],
-    sourceText: 'ACID là tập hợp các tính chất đảm bảo giao dịch CSDL được xử lý tin cậy: Atomicity, Consistency, Isolation, Durability.',
-    sourcePage: 102,
-  },
-]
+import { mockStudyQuestions } from '@/mocks'
+import { QuestionType, QuestionTypeLabel } from '@/models'
 
 export default function StudyPage() {
   const navigate = useNavigate()
@@ -78,13 +29,13 @@ export default function StudyPage() {
   const [showSource, setShowSource] = useState(false)
   const [bookmarked, setBookmarked] = useState({})
 
-  const question = mockQuestions[currentQ]
-  const totalQ = mockQuestions.length
+  const question = mockStudyQuestions[currentQ]
+  const totalQ = mockStudyQuestions.length
   const progressPct = ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100
 
   const handleSelect = (label) => {
     if (submitted) return
-    if (question.type === 'multi') {
+    if (question.questionType === QuestionType.MULTI) {
       setSelected((prev) => {
         const current = prev[question.id] || []
         return {
@@ -107,8 +58,8 @@ export default function StudyPage() {
   }
 
   const userIsCorrect = () => {
-    if (question.type === 'fill') return fillAnswer.trim().toLowerCase() === question.correctAnswer.toLowerCase()
-    if (question.type === 'multi') {
+    if (question.questionType === QuestionType.FILL) return fillAnswer.trim().toLowerCase() === question.correctAnswer.toLowerCase()
+    if (question.questionType === QuestionType.MULTI) {
       const sel = selected[question.id] || []
       const correct = question.options.filter((o) => o.isCorrect).map((o) => o.label)
       return sel.length === correct.length && sel.every((s) => correct.includes(s))
@@ -151,8 +102,8 @@ export default function StudyPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-slate-800">Câu {currentQ + 1}/{totalQ}</span>
-            <Badge variant={question.type === 'mcq' ? 'default' : question.type === 'multi' ? 'info' : 'warning'}>
-              {question.type === 'mcq' ? 'Trắc nghiệm' : question.type === 'multi' ? 'Chọn nhiều' : 'Điền từ'}
+            <Badge variant={question.questionType === QuestionType.MCQ ? 'default' : question.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
+              {QuestionTypeLabel[question.questionType]}
             </Badge>
           </div>
         </div>
@@ -175,10 +126,10 @@ export default function StudyPage() {
         <CardContent className="space-y-5">
           <p className="text-base text-slate-800 font-medium leading-relaxed vn-text">{question.content}</p>
 
-          {(question.type === 'mcq' || question.type === 'multi') && (
+          {(question.questionType === QuestionType.MCQ || question.questionType === QuestionType.MULTI) && (
             <div className="space-y-2">
               {question.options.map((opt) => {
-                const isSelected = question.type === 'multi'
+                const isSelected = question.questionType === QuestionType.MULTI
                   ? (selected[question.id] || []).includes(opt.label)
                   : selected[question.id] === opt.label
                 const correct = isCorrect(opt)
@@ -218,7 +169,7 @@ export default function StudyPage() {
             </div>
           )}
 
-          {question.type === 'fill' && (
+          {question.questionType === QuestionType.FILL && (
             <div className="space-y-2">
               <input
                 type="text"

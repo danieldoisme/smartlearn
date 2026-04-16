@@ -25,31 +25,34 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { mockDocuments, mockChapters, getTopicName, formatFileSize } from '@/mocks'
+import { QuestionType, QuestionTypeLabel } from '@/models'
 
-const mockDocument = {
-  id: 1,
-  title: 'Giáo trình Cơ sở dữ liệu',
-  topic: 'CSDL',
-  fileType: 'pdf',
-  fileSize: '4.2 MB',
+// Build enriched document view from normalized models
+// In production, these computed fields would come from the API response
+const questionCounts = [8, 10, 12, 10, 8, 6, 5, 5]
+const answeredCounts = [8, 10, 8, 0, 0, 0, 0, 0]
+const accuracyValues = [87, 70, 75, 0, 0, 0, 0, 0]
+
+const baseDoc = mockDocuments[0]
+const enrichedDoc = {
+  ...baseDoc,
+  topicName: getTopicName(baseDoc.topicId),
   totalQuestions: 64,
-  createdAt: '12/03/2026',
-  chapters: [
-    { id: 1, title: 'Chương 1: Tổng quan về CSDL', questions: 8, answered: 8, accuracy: 87, status: 'completed', pageStart: 1, pageEnd: 18 },
-    { id: 2, title: 'Chương 2: Mô hình quan hệ', questions: 10, answered: 10, accuracy: 70, status: 'completed', pageStart: 19, pageEnd: 42 },
-    { id: 3, title: 'Chương 3: Đại số quan hệ', questions: 12, answered: 8, accuracy: 75, status: 'in_progress', pageStart: 43, pageEnd: 68 },
-    { id: 4, title: 'Chương 4: Ngôn ngữ SQL', questions: 10, answered: 0, accuracy: 0, status: 'not_started', pageStart: 69, pageEnd: 95 },
-    { id: 5, title: 'Chương 5: Chuẩn hóa CSDL', questions: 8, answered: 0, accuracy: 0, status: 'not_started', pageStart: 96, pageEnd: 120 },
-    { id: 6, title: 'Chương 6: Thiết kế CSDL', questions: 6, answered: 0, accuracy: 0, status: 'not_started', pageStart: 121, pageEnd: 145 },
-    { id: 7, title: 'Chương 7: Giao dịch & Khóa', questions: 5, answered: 0, accuracy: 0, status: 'not_started', pageStart: 146, pageEnd: 168 },
-    { id: 8, title: 'Chương 8: Bảo mật & Phân quyền', questions: 5, answered: 0, accuracy: 0, status: 'not_started', pageStart: 169, pageEnd: 190 },
-  ],
+  chapters: mockChapters
+    .filter((ch) => ch.documentId === baseDoc.id)
+    .map((ch, i) => ({
+      ...ch,
+      questionCount: questionCounts[i] || 0,
+      answeredCount: answeredCounts[i] || 0,
+      accuracy: accuracyValues[i] || 0,
+    })),
 }
 
 const questionTypes = [
-  { value: 'mcq', label: 'Trắc nghiệm' },
-  { value: 'multi', label: 'Chọn nhiều' },
-  { value: 'fill', label: 'Điền từ' },
+  { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
+  { value: QuestionType.MULTI, label: QuestionTypeLabel[QuestionType.MULTI] },
+  { value: QuestionType.FILL, label: QuestionTypeLabel[QuestionType.FILL] },
   { value: 'mixed', label: 'Hỗn hợp' },
 ]
 
@@ -62,6 +65,12 @@ const item = {
   show: { opacity: 1, y: 0 },
 }
 
+function getChapterStatus(ch) {
+  if (ch.answeredCount >= ch.questionCount && ch.questionCount > 0) return 'completed'
+  if (ch.answeredCount > 0) return 'in_progress'
+  return 'not_started'
+}
+
 export default function DocumentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -70,8 +79,8 @@ export default function DocumentDetailPage() {
   const [genConfig, setGenConfig] = useState({ type: 'mixed', count: 10 })
   const [generating, setGenerating] = useState(false)
 
-  const doc = mockDocument
-  const totalAnswered = doc.chapters.reduce((s, c) => s + c.answered, 0)
+  const doc = enrichedDoc
+  const totalAnswered = doc.chapters.reduce((s, c) => s + c.answeredCount, 0)
   const overallProgress = Math.round((totalAnswered / doc.totalQuestions) * 100)
 
   const handleGenerate = () => {
@@ -103,9 +112,9 @@ export default function DocumentDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900">{doc.title}</h1>
-            <Badge variant="secondary">{doc.topic}</Badge>
+            <Badge variant="secondary">{doc.topicName}</Badge>
           </div>
-          <p className="text-sm text-slate-500 mt-0.5">{doc.chapters.length} chương · {doc.totalQuestions} câu hỏi · {doc.fileSize}</p>
+          <p className="text-sm text-slate-500 mt-0.5">{doc.chapters.length} chương · {doc.totalQuestions} câu hỏi · {formatFileSize(doc.fileSize)}</p>
         </div>
       </motion.div>
 
@@ -119,7 +128,7 @@ export default function DocumentDetailPage() {
             <Progress value={overallProgress} className="h-2.5" />
             <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
               <span>{totalAnswered}/{doc.totalQuestions} câu đã làm</span>
-              <span>{doc.chapters.filter((c) => c.status === 'completed').length}/{doc.chapters.length} chương hoàn thành</span>
+              <span>{doc.chapters.filter((c) => getChapterStatus(c) === 'completed').length}/{doc.chapters.length} chương hoàn thành</span>
             </div>
           </CardContent>
         </Card>
@@ -131,67 +140,70 @@ export default function DocumentDetailPage() {
         </div>
 
         <div className="space-y-2">
-          {doc.chapters.map((ch) => (
-            <Card key={ch.id} className="p-4 group">
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  {statusIcon(ch.status)}
+          {doc.chapters.map((ch) => {
+            const status = getChapterStatus(ch)
+            return (
+              <Card key={ch.id} className="p-4 group">
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    {statusIcon(status)}
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-slate-800">{ch.title}</h3>
-                      {statusLabel(ch.status)}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      <span>Trang {ch.pageStart}–{ch.pageEnd}</span>
-                      <span>{ch.questions} câu hỏi</span>
-                      {ch.answered > 0 && (
-                        <>
-                          <span>{ch.answered}/{ch.questions} đã làm</span>
-                          <span className={ch.accuracy >= 75 ? 'text-emerald-600' : ch.accuracy >= 60 ? 'text-amber-600' : 'text-red-600'}>
-                            {ch.accuracy}% chính xác
-                          </span>
-                        </>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-medium text-slate-800">{ch.title}</h3>
+                        {statusLabel(status)}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <span>Trang {ch.pageStart}–{ch.pageEnd}</span>
+                        <span>{ch.questionCount} câu hỏi</span>
+                        {ch.answeredCount > 0 && (
+                          <>
+                            <span>{ch.answeredCount}/{ch.questionCount} đã làm</span>
+                            <span className={ch.accuracy >= 75 ? 'text-emerald-600' : ch.accuracy >= 60 ? 'text-amber-600' : 'text-red-600'}>
+                              {ch.accuracy}% chính xác
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {ch.answeredCount > 0 && (
+                        <Progress value={(ch.answeredCount / ch.questionCount) * 100} className="mt-2 h-1" />
                       )}
                     </div>
-                    {ch.answered > 0 && (
-                      <Progress value={(ch.answered / ch.questions) * 100} className="mt-2 h-1" />
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {ch.questions === 0 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { setGenerateChapter(ch); setShowGenerate(true) }}
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Tạo câu hỏi
-                      </Button>
-                    ) : (
-                      <>
+                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {ch.questionCount === 0 ? (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => { setGenerateChapter(ch); setShowGenerate(true) }}
                         >
                           <Sparkles className="h-3.5 w-3.5" />
-                          Tạo thêm
+                          Tạo câu hỏi
                         </Button>
-                        <Link to="/study">
-                          <Button size="sm">
-                            <Play className="h-3.5 w-3.5" />
-                            Học
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setGenerateChapter(ch); setShowGenerate(true) }}
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Tạo thêm
                           </Button>
-                        </Link>
-                      </>
-                    )}
+                          <Link to="/study">
+                            <Button size="sm">
+                              <Play className="h-3.5 w-3.5" />
+                              Học
+                            </Button>
+                          </Link>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       </motion.div>
 
