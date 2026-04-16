@@ -1,162 +1,177 @@
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Trophy, CheckCircle, XCircle, SkipForward, Clock, RotateCcw, ArrowRight, Library,
+  Trophy,
+  CheckCircle2,
+  XCircle,
+  SkipForward,
+  RotateCcw,
+  Home,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
-import AppLayout from '@/components/AppLayout'
+import { useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
 
-const WRONG = [
-  { question: 'Cú pháp nào dùng để lấy các bản ghi duy nhất trong SQL?', userAnswer: 'SELECT UNIQUE', correct: 'SELECT DISTINCT' },
-  { question: 'Dạng chuẩn nào loại bỏ phụ thuộc bắc cầu?', userAnswer: '2NF', correct: '3NF' },
-  { question: 'Khoá ngoại (Foreign Key) dùng để làm gì?', userAnswer: 'Tăng tốc truy vấn', correct: 'Đảm bảo tính toàn vẹn tham chiếu' },
-]
-
-const STATS = [
-  { label: 'Đúng', value: '15', sub: '75%', icon: CheckCircle, gradient: 'from-tertiary-container to-secondary-container', text: 'text-tertiary' },
-  { label: 'Sai', value: '3', sub: '15%', icon: XCircle, gradient: 'from-error-container to-[#FFE5E0]', text: 'text-error' },
-  { label: 'Bỏ qua', value: '2', sub: '10%', icon: SkipForward, gradient: 'from-secondary-container to-surface-container', text: 'text-secondary' },
-  { label: 'Thời gian', value: '12\'45"', sub: 'phút', icon: Clock, gradient: 'from-surface-container to-surface-high', text: 'text-on-surface-variant' },
-]
-
-const stagger = { animate: { transition: { staggerChildren: 0.07 } } }
-const fadeUp = {
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+const mockResult = {
+  totalQuestions: 10,
+  correct: 7,
+  wrong: 2,
+  skipped: 1,
+  score: 70,
+  timeTaken: '18:42',
+  questions: [
+    { id: 1, content: 'Trong SQL, lệnh nào dùng để tạo bảng mới?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 23' },
+    { id: 2, content: 'Khóa ngoại (Foreign Key) dùng để làm gì?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 31' },
+    { id: 3, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', userAnswer: 'A', correctAnswer: 'B', isCorrect: false, source: 'Trang 56' },
+    { id: 4, content: 'Lệnh SQL nào dùng để xóa tất cả dữ liệu nhưng giữ cấu trúc?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 40' },
+    { id: 5, content: 'Phép toán nào trả về các bộ có mặt ở cả hai quan hệ?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 48' },
+    { id: 6, content: 'Chỉ mục (Index) tối ưu thao tác nào?', userAnswer: 'C', correctAnswer: 'C', isCorrect: true, source: 'Trang 89' },
+    { id: 7, content: 'Ràng buộc NOT NULL thuộc loại nào?', userAnswer: 'B', correctAnswer: 'A', isCorrect: false, source: 'Trang 35' },
+    { id: 8, content: 'Trigger là gì?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 112' },
+    { id: 9, content: 'VIEW trong SQL là gì?', userAnswer: 'B', correctAnswer: 'B', isCorrect: true, source: 'Trang 95' },
+    { id: 10, content: 'Deadlock xảy ra khi nào?', userAnswer: null, correctAnswer: 'B', isCorrect: false, skipped: true, source: 'Trang 130' },
+  ],
 }
 
 export default function ResultPage() {
-  const navigate = useNavigate()
+  const [expandedQ, setExpandedQ] = useState(null)
+  const { totalQuestions, correct, wrong, skipped, score, timeTaken, questions } = mockResult
+
+  const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
+  const scoreBg = score >= 80 ? 'from-emerald-50' : score >= 60 ? 'from-amber-50' : 'from-red-50'
 
   return (
-    <AppLayout>
-      <div className="p-10 max-w-2xl mx-auto">
-        {/* Hero */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="text-center rounded-2xl border border-outline-variant shadow-sm p-12 mb-10 relative overflow-hidden bg-gradient-to-br from-tertiary-container via-secondary-container to-primary-container"
-        >
-          <div className="absolute -top-6 -left-6 w-28 h-28 rounded-full bg-white/10" />
-          <div className="absolute -bottom-8 -right-8 w-36 h-36 rounded-full bg-white/10" />
-          <div className="relative z-10">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
-            >
-              <Trophy size={56} className="text-tertiary mx-auto mb-4" />
-            </motion.div>
-            <h1 className="text-3xl font-bold text-on-surface mb-1">Hoàn thành xuất sắc!</h1>
-            <p className="text-on-surface-variant">Chương 4: Truy vấn SQL nâng cao</p>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-3xl mx-auto space-y-6"
+    >
+      <Card className={`p-8 bg-gradient-to-br ${scoreBg} to-white`}>
+        <CardContent className="text-center space-y-4">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100">
+            <Trophy className={`h-8 w-8 ${scoreColor}`} />
           </div>
-        </motion.div>
+          <div>
+            <p className={`text-5xl font-bold ${scoreColor}`}>{score}%</p>
+            <p className="text-slate-500 text-sm mt-1">Điểm số của bạn</p>
+          </div>
+          <div className="flex items-center justify-center gap-6 text-sm">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="text-slate-600">{correct} đúng</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <XCircle className="h-4 w-4 text-red-500" />
+              <span className="text-slate-600">{wrong} sai</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <SkipForward className="h-4 w-4 text-slate-400" />
+              <span className="text-slate-600">{skipped} bỏ qua</span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Thời gian: {timeTaken}</p>
+        </CardContent>
+      </Card>
 
-        {/* Stats */}
-        <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-          {STATS.map(s => (
-            <motion.div key={s.label} variants={fadeUp}>
-              <div className={cn("rounded-2xl p-4 text-center bg-gradient-to-br hover:shadow-md hover:-translate-y-0.5 transition-all duration-200", s.gradient)}>
-                <s.icon size={22} className={cn("mx-auto mb-1.5", s.text)} />
-                <p className={cn("text-2xl font-bold", s.text)}>{s.value}</p>
-                <p className={cn("text-xs font-semibold opacity-70", s.text)}>{s.label}</p>
-                <p className={cn("text-[10px] opacity-50 mt-0.5", s.text)}>{s.sub}</p>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Chart */}
-        <motion.div {...fadeUp}>
-          <Card className="mb-10">
-            <CardContent className="p-8 flex items-center gap-10">
-              <div className="relative w-32 h-32 shrink-0">
-                <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#EDEEE7" strokeWidth="3.2" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#386663" strokeWidth="3.2" strokeDasharray="75 25" strokeLinecap="round" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#BA1A1A" strokeWidth="3.2" strokeDasharray="15 85" strokeDashoffset="-75" strokeLinecap="round" />
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#C5EFAB" strokeWidth="3.2" strokeDasharray="10 90" strokeDashoffset="-90" strokeLinecap="round" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-on-surface">75%</span>
-                  <span className="text-xs text-muted font-medium">đúng</span>
-                </div>
-              </div>
-              <div className="space-y-3 flex-1">
-                <h3 className="text-sm font-bold text-on-surface mb-3">Phân bổ kết quả</h3>
-                {[
-                  { color: '#386663', label: 'Đúng', desc: '15 câu (75%)', pct: 75 },
-                  { color: '#BA1A1A', label: 'Sai', desc: '3 câu (15%)', pct: 15 },
-                  { color: '#C5EFAB', label: 'Bỏ qua', desc: '2 câu (10%)', pct: 10 },
-                ].map(r => (
-                  <div key={r.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                        <span className="text-sm text-on-surface font-medium">{r.label}</span>
-                      </div>
-                      <span className="text-xs text-muted">{r.desc}</span>
-                    </div>
-                    <Progress value={r.pct} indicatorClassName={`bg-[${r.color}]`} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Wrong answers */}
-        <motion.div {...fadeUp}>
-          <Card className="mb-10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-error-container to-[#FFE5E0] flex items-center justify-center">
-                  <XCircle size={16} className="text-error" />
-                </div>
-                Câu trả lời chưa đúng
-                <Badge variant="destructive" className="ml-auto">{WRONG.length} câu</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {WRONG.map((w, i) => (
-                  <div key={i} className="p-4 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant hover:shadow-md transition-all duration-200">
-                    <p className="text-sm font-semibold text-on-surface mb-3 leading-relaxed">{w.question}</p>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="p-3 rounded-xl bg-error-container/50 border border-error/15">
-                        <p className="text-[10px] font-bold text-error uppercase tracking-wide mb-1">Đáp án của bạn</p>
-                        <p className="text-sm text-error font-medium">{w.userAnswer}</p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-tertiary-container/50 border border-tertiary/15">
-                        <p className="text-[10px] font-bold text-tertiary uppercase tracking-wide mb-1">Đáp án đúng</p>
-                        <p className="text-sm text-tertiary font-medium">{w.correct}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Actions */}
-        <motion.div {...fadeUp} className="flex flex-col sm:flex-row gap-3">
-          <Button onClick={() => navigate('/study')} className="flex-1" size="lg">
-            <RotateCcw size={16} /> Ôn tập câu sai
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/study')} className="flex-1" size="lg">
-            Học chương tiếp <ArrowRight size={16} />
-          </Button>
-          <Button variant="ghost" onClick={() => navigate('/library')} className="flex-1" size="lg">
-            <Library size={16} /> Về thư viện
-          </Button>
-        </motion.div>
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="p-4 text-center">
+          <CardContent>
+            <p className="text-2xl font-bold text-emerald-600">{correct}</p>
+            <p className="text-xs text-slate-500 mt-1">Câu đúng</p>
+            <Progress value={(correct / totalQuestions) * 100} className="mt-2 h-1" />
+          </CardContent>
+        </Card>
+        <Card className="p-4 text-center">
+          <CardContent>
+            <p className="text-2xl font-bold text-red-500">{wrong}</p>
+            <p className="text-xs text-slate-500 mt-1">Câu sai</p>
+            <Progress value={(wrong / totalQuestions) * 100} className="mt-2 h-1 [&>div>div]:bg-red-400" />
+          </CardContent>
+        </Card>
+        <Card className="p-4 text-center">
+          <CardContent>
+            <p className="text-2xl font-bold text-slate-400">{skipped}</p>
+            <p className="text-xs text-slate-500 mt-1">Bỏ qua</p>
+            <Progress value={(skipped / totalQuestions) * 100} className="mt-2 h-1 [&>div>div]:bg-slate-300" />
+          </CardContent>
+        </Card>
       </div>
-    </AppLayout>
+
+      <div>
+        <h2 className="text-base font-semibold text-slate-900 mb-3">Chi tiết từng câu</h2>
+        <div className="space-y-2">
+          {questions.map((q, i) => (
+            <Card key={q.id} className="p-4">
+              <CardContent>
+                <button
+                  onClick={() => setExpandedQ(expandedQ === q.id ? null : q.id)}
+                  className="w-full flex items-center gap-3 text-left cursor-pointer"
+                >
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${
+                    q.isCorrect
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : q.skipped
+                        ? 'bg-slate-100 text-slate-400'
+                        : 'bg-red-50 text-red-600'
+                  }`}>
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 text-sm text-slate-700 vn-text">{q.content}</span>
+                  {q.isCorrect ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                  ) : q.skipped ? (
+                    <SkipForward className="h-4 w-4 text-slate-400 shrink-0" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                  )}
+                  {expandedQ === q.id ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
+                </button>
+                {expandedQ === q.id && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="mt-3 ml-10 space-y-2 text-sm"
+                  >
+                    {!q.skipped && (
+                      <p className={q.isCorrect ? 'text-emerald-600' : 'text-red-600'}>
+                        Bạn chọn: {q.userAnswer} {q.isCorrect ? '✓' : `✗ (Đáp án đúng: ${q.correctAnswer})`}
+                      </p>
+                    )}
+                    {q.skipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <FileText className="h-3 w-3" />
+                      <span>{q.source}</span>
+                    </div>
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <Link to="/review" className="flex-1">
+          <Button variant="outline" className="w-full">
+            <RotateCcw className="h-4 w-4" />
+            Ôn tập câu sai
+          </Button>
+        </Link>
+        <Link to="/" className="flex-1">
+          <Button className="w-full">
+            <Home className="h-4 w-4" />
+            Về trang chủ
+          </Button>
+        </Link>
+      </div>
+    </motion.div>
   )
 }

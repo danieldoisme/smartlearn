@@ -36,3 +36,5 @@ uv.lock
 # Tools
 .omc/
 .claude/
+.omx/
+.codex/

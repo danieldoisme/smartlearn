@@ -1,0 +1,223 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  RotateCcw,
+  XCircle,
+  FileText,
+  Filter,
+  Play,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Trophy,
+  HelpCircle,
+} from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+
+const mockWrongQuestions = [
+  {
+    document: 'Giáo trình Cơ sở dữ liệu',
+    chapters: [
+      {
+        title: 'Chương 2: Mô hình quan hệ',
+        questions: [
+          { id: 1, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', type: 'mcq', userAnswer: 'A', correctAnswer: 'B', attempts: 1, lastAttempt: '2 ngày trước' },
+          { id: 2, content: 'Ràng buộc NOT NULL thuộc loại nào?', type: 'mcq', userAnswer: 'B', correctAnswer: 'A', attempts: 2, lastAttempt: '3 ngày trước' },
+        ],
+      },
+      {
+        title: 'Chương 3: Đại số quan hệ',
+        questions: [
+          { id: 3, content: 'Phép chia (Division) trong đại số quan hệ dùng để làm gì?', type: 'mcq', userAnswer: 'C', correctAnswer: 'A', attempts: 1, lastAttempt: '1 ngày trước' },
+        ],
+      },
+    ],
+  },
+  {
+    document: 'Lập trình hướng đối tượng',
+    chapters: [
+      {
+        title: 'Chương 3: Kế thừa',
+        questions: [
+          { id: 4, content: 'Multiple inheritance gây ra vấn đề gì trong C++?', type: 'mcq', userAnswer: 'A', correctAnswer: 'C', attempts: 1, lastAttempt: '5 ngày trước' },
+          { id: 5, content: 'Abstract class khác Interface ở điểm nào?', type: 'multi', userAnswer: 'A, B', correctAnswer: 'A, C, D', attempts: 3, lastAttempt: '4 ngày trước' },
+        ],
+      },
+      {
+        title: 'Chương 5: Design Patterns',
+        questions: [
+          { id: 6, content: 'Singleton pattern đảm bảo điều gì?', type: 'fill', userAnswer: 'một instance', correctAnswer: 'chỉ có một instance duy nhất', attempts: 1, lastAttempt: '6 ngày trước' },
+        ],
+      },
+    ],
+  },
+  {
+    document: 'Mạng máy tính',
+    chapters: [
+      {
+        title: 'Chương 1: Mô hình OSI',
+        questions: [
+          { id: 7, content: 'Tầng nào chịu trách nhiệm định tuyến?', type: 'mcq', userAnswer: 'B', correctAnswer: 'C', attempts: 1, lastAttempt: '1 tuần trước' },
+        ],
+      },
+    ],
+  },
+]
+
+const typeLabels = { mcq: 'Trắc nghiệm', multi: 'Chọn nhiều', fill: 'Điền từ' }
+const typeFilters = ['all', 'mcq', 'multi', 'fill']
+const typeFilterLabels = { all: 'Tất cả', mcq: 'Trắc nghiệm', multi: 'Chọn nhiều', fill: 'Điền từ' }
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
+}
+
+export default function ReviewPage() {
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [expandedDoc, setExpandedDoc] = useState(mockWrongQuestions[0]?.document)
+
+  const totalWrong = mockWrongQuestions.reduce(
+    (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
+    0
+  )
+
+  const filtered = mockWrongQuestions.map((doc) => ({
+    ...doc,
+    chapters: doc.chapters
+      .map((ch) => ({
+        ...ch,
+        questions: ch.questions.filter((q) => typeFilter === 'all' || q.type === typeFilter),
+      }))
+      .filter((ch) => ch.questions.length > 0),
+  })).filter((doc) => doc.chapters.length > 0)
+
+  const filteredTotal = filtered.reduce(
+    (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
+    0
+  )
+
+  if (totalWrong === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-2xl mx-auto text-center py-20"
+      >
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 mb-4">
+          <Trophy className="h-8 w-8 text-emerald-500" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Chúc mừng!</h2>
+        <p className="text-slate-500 mb-6">Bạn không có câu sai nào cần ôn tập.</p>
+        <Link to="/exam">
+          <Button>Làm bài kiểm tra tổng hợp</Button>
+        </Link>
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-4xl">
+      <motion.div variants={item}>
+        <h1 className="text-2xl font-bold text-slate-900">Ôn tập câu sai</h1>
+        <p className="text-slate-500 text-sm mt-1">{totalWrong} câu cần ôn tập</p>
+      </motion.div>
+
+      <motion.div variants={item} className="flex items-center gap-3 flex-wrap">
+        <Filter className="h-4 w-4 text-slate-400" />
+        {typeFilters.map((f) => (
+          <button
+            key={f}
+            onClick={() => setTypeFilter(f)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              typeFilter === f
+                ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                : 'text-slate-500 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {typeFilterLabels[f]}
+          </button>
+        ))}
+        <span className="text-xs text-slate-400 ml-auto">{filteredTotal} câu</span>
+      </motion.div>
+
+      <motion.div variants={item} className="space-y-4">
+        {filtered.map((doc) => (
+          <Card key={doc.document} className="overflow-hidden">
+            <button
+              onClick={() => setExpandedDoc(expandedDoc === doc.document ? null : doc.document)}
+              className="w-full flex items-center gap-4 p-5 text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 shrink-0">
+                <XCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-800">{doc.document}</h3>
+                <p className="text-xs text-slate-500">
+                  {doc.chapters.reduce((s, ch) => s + ch.questions.length, 0)} câu sai · {doc.chapters.length} chương
+                </p>
+              </div>
+              <Link to="/study" onClick={(e) => e.stopPropagation()}>
+                <Button size="sm">
+                  <Play className="h-3.5 w-3.5" />
+                  Ôn tập
+                </Button>
+              </Link>
+              {expandedDoc === doc.document ? (
+                <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+              )}
+            </button>
+
+            {expandedDoc === doc.document && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="border-t border-slate-100"
+              >
+                {doc.chapters.map((ch) => (
+                  <div key={ch.title}>
+                    <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-50">
+                      <FileText className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-xs font-medium text-slate-600">{ch.title}</span>
+                      <Badge variant="secondary" className="ml-auto">{ch.questions.length} câu</Badge>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {ch.questions.map((q) => (
+                        <div key={q.id} className="flex items-start gap-3 px-5 py-3">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-red-50 shrink-0 mt-0.5">
+                            <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-700 vn-text">{q.content}</p>
+                            <div className="flex items-center gap-3 mt-1.5 text-xs">
+                              <Badge variant={q.type === 'mcq' ? 'default' : q.type === 'multi' ? 'info' : 'warning'}>
+                                {typeLabels[q.type]}
+                              </Badge>
+                              <span className="text-red-500">Bạn: {q.userAnswer}</span>
+                              <span className="text-emerald-600">Đáp án: {q.correctAnswer}</span>
+                              <span className="text-slate-400">Đã thử {q.attempts} lần · {q.lastAttempt}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </Card>
+        ))}
+      </motion.div>
+    </motion.div>
+  )
+}

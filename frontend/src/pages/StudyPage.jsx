@@ -2,201 +2,312 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Bookmark, SkipForward, ChevronLeft, ChevronRight, BookOpen, Lightbulb, CheckCircle, XCircle,
+  ChevronLeft,
+  ChevronRight,
+  SkipForward,
+  BookmarkPlus,
+  BookOpen,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  Lightbulb,
+  Bookmark,
 } from 'lucide-react'
-import AppLayout from '@/components/AppLayout'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
 
-const QUESTIONS = [
+const mockQuestions = [
   {
-    id: 1, type: 'Trắc nghiệm',
-    content: 'Trong SQL, mệnh đề nào dùng để lọc kết quả sau khi GROUP BY?',
-    options: ['WHERE', 'HAVING', 'FILTER', 'ORDER BY'],
-    correct: 1,
-    source: 'Mệnh đề HAVING được sử dụng sau GROUP BY để lọc các nhóm, khác với WHERE lọc trước khi nhóm.',
-    page: 142,
+    id: 1,
+    type: 'mcq',
+    content: 'Trong mô hình quan hệ, khóa chính (Primary Key) có đặc điểm nào sau đây?',
+    options: [
+      { label: 'A', content: 'Có thể chứa giá trị NULL', isCorrect: false },
+      { label: 'B', content: 'Giá trị phải là duy nhất và không NULL', isCorrect: true },
+      { label: 'C', content: 'Mỗi bảng có thể có nhiều khóa chính', isCorrect: false },
+      { label: 'D', content: 'Khóa chính luôn là kiểu số nguyên', isCorrect: false },
+    ],
+    sourceText: 'Khóa chính (Primary Key) là một hoặc tập hợp các thuộc tính mà giá trị của nó xác định duy nhất mỗi bộ trong quan hệ. Khóa chính không được chứa giá trị NULL.',
+    sourcePage: 45,
   },
   {
-    id: 2, type: 'Trắc nghiệm',
-    content: 'Khoá chính (Primary Key) trong cơ sở dữ liệu quan hệ có đặc điểm gì?',
-    options: ['Có thể NULL', 'Duy nhất và NOT NULL', 'Cho phép trùng lặp', 'Chỉ là số nguyên'],
-    correct: 1,
-    source: 'Khoá chính phải duy nhất và không được phép NULL, đảm bảo nhận dạng mỗi bản ghi.',
-    page: 58,
+    id: 2,
+    type: 'mcq',
+    content: 'Phép toán nào trong đại số quan hệ dùng để kết hợp các bộ từ hai quan hệ dựa trên điều kiện?',
+    options: [
+      { label: 'A', content: 'Phép chiếu (Projection)', isCorrect: false },
+      { label: 'B', content: 'Phép chọn (Selection)', isCorrect: false },
+      { label: 'C', content: 'Phép kết (Join)', isCorrect: true },
+      { label: 'D', content: 'Phép hợp (Union)', isCorrect: false },
+    ],
+    sourceText: 'Phép kết (Join) là phép toán kết hợp các bộ từ hai quan hệ thành một quan hệ mới, dựa trên một điều kiện kết nối giữa các thuộc tính.',
+    sourcePage: 52,
   },
   {
-    id: 3, type: 'Chọn nhiều',
-    content: 'Các dạng chuẩn hoá nào phổ biến trong thiết kế CSDL?',
-    options: ['1NF', '2NF', '3NF', 'BCNF'],
-    correct: 1,
-    source: 'Các dạng chuẩn 1NF, 2NF, 3NF và BCNF được dùng để loại bỏ dư thừa dữ liệu.',
-    page: 98,
+    id: 3,
+    type: 'fill',
+    content: 'Chuẩn hóa cơ sở dữ liệu đến dạng chuẩn 3NF nhằm loại bỏ phụ thuộc _______.',
+    correctAnswer: 'bắc cầu',
+    sourceText: 'Dạng chuẩn 3 (3NF) yêu cầu quan hệ phải ở 2NF và không có thuộc tính không khóa nào phụ thuộc bắc cầu vào khóa chính.',
+    sourcePage: 78,
+  },
+  {
+    id: 4,
+    type: 'multi',
+    content: 'Chọn các đặc tính của giao dịch (Transaction) trong CSDL — tính chất ACID:',
+    options: [
+      { label: 'A', content: 'Atomicity (Tính nguyên tử)', isCorrect: true },
+      { label: 'B', content: 'Consistency (Tính nhất quán)', isCorrect: true },
+      { label: 'C', content: 'Isolation (Tính cô lập)', isCorrect: true },
+      { label: 'D', content: 'Distribution (Tính phân tán)', isCorrect: false },
+      { label: 'E', content: 'Durability (Tính bền vững)', isCorrect: true },
+    ],
+    sourceText: 'ACID là tập hợp các tính chất đảm bảo giao dịch CSDL được xử lý tin cậy: Atomicity, Consistency, Isolation, Durability.',
+    sourcePage: 102,
   },
 ]
-const TOTAL = 20
 
 export default function StudyPage() {
-  const [current, setCurrent] = useState(0)
-  const [answers, setAnswers] = useState({})
-  const [bookmarked, setBookmarked] = useState(new Set())
   const navigate = useNavigate()
+  const [currentQ, setCurrentQ] = useState(0)
+  const [selected, setSelected] = useState({})
+  const [fillAnswer, setFillAnswer] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [showSource, setShowSource] = useState(false)
+  const [bookmarked, setBookmarked] = useState({})
 
-  const q = QUESTIONS[current % QUESTIONS.length]
-  const answered = answers[current]
-  const answeredCount = Object.keys(answers).length
+  const question = mockQuestions[currentQ]
+  const totalQ = mockQuestions.length
+  const progressPct = ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100
 
-  const handleAnswer = (idx) => { if (answered !== undefined) return; setAnswers(prev => ({ ...prev, [current]: idx })) }
-
-  const getOptionStyle = (idx) => {
-    if (answered === undefined) return 'border-outline-variant bg-white hover:bg-surface-dim hover:border-primary-light hover:shadow-sm cursor-pointer hover:-translate-y-0.5'
-    if (idx === q.correct) return 'border-tertiary bg-tertiary-container/40 text-tertiary shadow-sm'
-    if (idx === answered && idx !== q.correct) return 'border-error bg-error-container/40 text-error shadow-sm'
-    return 'border-outline-variant bg-white opacity-40 pointer-events-none'
+  const handleSelect = (label) => {
+    if (submitted) return
+    if (question.type === 'multi') {
+      setSelected((prev) => {
+        const current = prev[question.id] || []
+        return {
+          ...prev,
+          [question.id]: current.includes(label)
+            ? current.filter((l) => l !== label)
+            : [...current, label],
+        }
+      })
+    } else {
+      setSelected((prev) => ({ ...prev, [question.id]: label }))
+    }
   }
 
-  const statusColor = (i) => {
-    if (answers[i] === undefined) return 'bg-surface-container text-muted hover:bg-surface-high'
-    const qi = QUESTIONS[i % QUESTIONS.length]
-    return answers[i] === qi.correct ? 'bg-tertiary text-on-tertiary shadow-sm' : 'bg-error text-white shadow-sm'
+  const handleSubmit = () => setSubmitted(true)
+
+  const isCorrect = (option) => {
+    if (!submitted) return null
+    return option.isCorrect
+  }
+
+  const userIsCorrect = () => {
+    if (question.type === 'fill') return fillAnswer.trim().toLowerCase() === question.correctAnswer.toLowerCase()
+    if (question.type === 'multi') {
+      const sel = selected[question.id] || []
+      const correct = question.options.filter((o) => o.isCorrect).map((o) => o.label)
+      return sel.length === correct.length && sel.every((s) => correct.includes(s))
+    }
+    const correct = question.options.find((o) => o.isCorrect)
+    return selected[question.id] === correct?.label
+  }
+
+  const goNext = () => {
+    if (currentQ < totalQ - 1) {
+      setCurrentQ(currentQ + 1)
+      setSubmitted(false)
+      setShowSource(false)
+      setFillAnswer('')
+    } else {
+      navigate('/result')
+    }
+  }
+
+  const goPrev = () => {
+    if (currentQ > 0) {
+      setCurrentQ(currentQ - 1)
+      setSubmitted(false)
+      setShowSource(false)
+      setFillAnswer('')
+    }
   }
 
   return (
-    <AppLayout>
-      <div className="flex h-screen overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-outline-variant shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
-                <BookOpen size={16} className="text-muted" />
-              </div>
-              <div>
-                <p className="text-[11px] text-muted font-medium">Cơ sở dữ liệu</p>
-                <h2 className="text-sm font-bold text-on-surface">Chương 4: Truy vấn SQL nâng cao</h2>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Badge>Câu {current + 1} / {TOTAL}</Badge>
-              <Button
-                variant={bookmarked.has(current) ? 'secondary' : 'ghost'}
-                size="icon"
-                onClick={() => setBookmarked(prev => { const s = new Set(prev); s.has(current) ? s.delete(current) : s.add(current); return s })}
-              >
-                <Bookmark size={16} className={bookmarked.has(current) ? 'fill-current' : ''} />
-              </Button>
-              <Button variant="outline" size="sm"
-                onClick={() => setAnswers(prev => ({ ...prev, [current]: -1 }))}>
-                <SkipForward size={14} /> Bỏ qua
-              </Button>
-            </div>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-3xl mx-auto space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+            <BookOpen className="h-4 w-4" />
+            <span>Giáo trình CSDL — Chương 3</span>
           </div>
-
-          {/* Progress */}
-          <Progress value={((current + 1) / TOTAL) * 100} className="h-1.5 rounded-none" />
-
-          {/* Question */}
-          <div className="flex-1 p-8 max-w-2xl mx-auto w-full">
-            <AnimatePresence mode="wait">
-              <motion.div key={current}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.25 }}
-              >
-                <Card>
-                  <CardContent className="p-8">
-                    <div className="flex items-center gap-2 mb-5">
-                      <Badge>{q.type}</Badge>
-                      <span className="text-xs text-muted">· Trang {q.page}</span>
-                    </div>
-                    <p className="text-lg font-semibold text-on-surface mb-7 leading-relaxed">{q.content}</p>
-
-                    <div className="grid grid-cols-1 gap-3 mb-6">
-                      {q.options.map((opt, idx) => (
-                        <button key={idx} onClick={() => handleAnswer(idx)}
-                          className={cn("flex items-center gap-3.5 px-5 py-4 rounded-xl border-2 text-sm font-medium text-left transition-all duration-200", getOptionStyle(idx))}>
-                          <span className={cn(
-                            "w-7 h-7 rounded-lg border-2 flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-200",
-                            answered === undefined ? "border-outline-variant text-muted"
-                            : idx === q.correct ? "border-tertiary bg-tertiary text-white"
-                            : idx === answered ? "border-error bg-error text-white"
-                            : "border-outline-variant text-muted"
-                          )}>
-                            {answered !== undefined && idx === q.correct ? <CheckCircle size={12} /> : answered !== undefined && idx === answered && idx !== q.correct ? <XCircle size={12} /> : String.fromCharCode(65 + idx)}
-                          </span>
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-
-                    {answered !== undefined && answered !== -1 && (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className="p-5 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant mb-5">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-primary-container/50 flex items-center justify-center shrink-0 mt-0.5">
-                            <Lightbulb size={16} className="text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-on-surface leading-relaxed mb-1.5">{q.source}</p>
-                            <p className="text-xs text-muted font-medium flex items-center gap-1">
-                              <BookOpen size={12} /> Giáo trình Cơ sở dữ liệu — Trang {q.page}
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    <div className="flex justify-between pt-2">
-                      <Button variant="outline" disabled={current === 0} onClick={() => setCurrent(c => c - 1)}>
-                        <ChevronLeft size={16} /> Câu trước
-                      </Button>
-                      <Button onClick={() => current >= TOTAL - 1 ? navigate('/result') : setCurrent(c => c + 1)}>
-                        {current >= TOTAL - 1 ? 'Hoàn thành' : 'Câu tiếp theo'} <ChevronRight size={16} />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </AnimatePresence>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-800">Câu {currentQ + 1}/{totalQ}</span>
+            <Badge variant={question.type === 'mcq' ? 'default' : question.type === 'multi' ? 'info' : 'warning'}>
+              {question.type === 'mcq' ? 'Trắc nghiệm' : question.type === 'multi' ? 'Chọn nhiều' : 'Điền từ'}
+            </Badge>
           </div>
         </div>
-
-        {/* Right panel */}
-        <aside className="w-56 shrink-0 bg-white border-l border-outline-variant flex flex-col p-4 hidden lg:flex">
-          <h3 className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Tiến độ bài học</h3>
-          <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant">
-            <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-muted font-medium">Đã làm</span>
-              <span className="text-primary font-bold">{answeredCount}/{TOTAL}</span>
-            </div>
-            <Progress value={(answeredCount / TOTAL) * 100} />
-          </div>
-          <div className="grid grid-cols-4 gap-1.5 mb-4">
-            {Array.from({ length: TOTAL }, (_, i) => (
-              <button key={i} onClick={() => setCurrent(i)}
-                className={cn("w-full aspect-square rounded-lg text-xs font-bold transition-all duration-200",
-                  i === current ? "ring-2 ring-primary ring-offset-1 bg-primary-container text-primary scale-105" : statusColor(i))}>
-                {i + 1}
-              </button>
-            ))}
-          </div>
-          <div className="text-xs text-muted space-y-1.5 mb-4">
-            {[['bg-tertiary','Đúng'],['bg-error','Sai'],['bg-secondary-container','Bỏ qua'],['bg-surface-container','Chưa làm']].map(([c,l]) => (
-              <div key={l} className="flex items-center gap-2">
-                <div className={cn("w-3.5 h-3.5 rounded", c)} /><span>{l}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-auto space-y-2">
-            <Button className="w-full" size="sm" onClick={() => navigate('/result')}>Nộp bài</Button>
-            <Button variant="ghost" className="w-full" size="sm" onClick={() => navigate('/library')}>Quay lại thư viện</Button>
-          </div>
-        </aside>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setBookmarked((p) => ({ ...p, [question.id]: !p[question.id] }))}
+        >
+          {bookmarked[question.id] ? (
+            <Bookmark className="h-5 w-5 text-primary-500 fill-primary-500" />
+          ) : (
+            <BookmarkPlus className="h-5 w-5" />
+          )}
+        </Button>
       </div>
-    </AppLayout>
+
+      <Progress value={progressPct} className="h-1.5" />
+
+      <Card className="p-6">
+        <CardContent className="space-y-5">
+          <p className="text-base text-slate-800 font-medium leading-relaxed vn-text">{question.content}</p>
+
+          {(question.type === 'mcq' || question.type === 'multi') && (
+            <div className="space-y-2">
+              {question.options.map((opt) => {
+                const isSelected = question.type === 'multi'
+                  ? (selected[question.id] || []).includes(opt.label)
+                  : selected[question.id] === opt.label
+                const correct = isCorrect(opt)
+
+                return (
+                  <button
+                    key={opt.label}
+                    onClick={() => handleSelect(opt.label)}
+                    disabled={submitted}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all cursor-pointer ${
+                      submitted
+                        ? correct
+                          ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                          : isSelected
+                            ? 'bg-red-50 border border-red-200 text-red-800'
+                            : 'bg-slate-50 border border-slate-100 text-slate-500'
+                        : isSelected
+                          ? 'bg-primary-50 border border-primary-200 text-primary-800'
+                          : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${
+                      submitted
+                        ? correct
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : isSelected ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'
+                        : isSelected ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      {opt.label}
+                    </span>
+                    <span className="flex-1 vn-text">{opt.content}</span>
+                    {submitted && correct && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                    {submitted && isSelected && !correct && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {question.type === 'fill' && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={fillAnswer}
+                onChange={(e) => setFillAnswer(e.target.value)}
+                disabled={submitted}
+                placeholder="Nhập đáp án..."
+                className="glass-input w-full h-11 px-4 text-sm text-slate-800 placeholder:text-slate-400"
+              />
+              {submitted && (
+                <p className={`text-sm ${userIsCorrect() ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {userIsCorrect() ? '✓ Chính xác!' : `✗ Đáp án đúng: ${question.correctAnswer}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {submitted && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-xl ${userIsCorrect() ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {userIsCorrect() ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-500" />
+                )}
+                <span className={`text-sm font-medium ${userIsCorrect() ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {userIsCorrect() ? 'Chính xác!' : 'Chưa đúng'}
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+
+      {submitted && (
+        <AnimatePresence>
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+            <button
+              onClick={() => setShowSource(!showSource)}
+              className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 mb-2 cursor-pointer"
+            >
+              <Lightbulb className="h-4 w-4" />
+              {showSource ? 'Ẩn nguồn trích dẫn' : 'Xem nguồn trích dẫn'}
+            </button>
+            {showSource && (
+              <Card className="p-4">
+                <CardContent>
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="h-4 w-4 text-slate-400" />
+                    <span className="text-xs text-slate-500">Trang {question.sourcePage}</span>
+                  </div>
+                  <p className="text-sm text-slate-600 leading-relaxed vn-text italic">
+                    &ldquo;{question.sourceText}&rdquo;
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
+
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={goPrev} disabled={currentQ === 0}>
+          <ChevronLeft className="h-4 w-4" />
+          Câu trước
+        </Button>
+        <div className="flex gap-2">
+          {!submitted ? (
+            <>
+              <Button variant="outline" onClick={goNext}>
+                <SkipForward className="h-4 w-4" />
+                Bỏ qua
+              </Button>
+              <Button onClick={handleSubmit} disabled={!selected[question.id] && !fillAnswer}>
+                Xác nhận
+              </Button>
+            </>
+          ) : (
+            <Button onClick={goNext}>
+              {currentQ < totalQ - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </motion.div>
   )
 }

@@ -1,183 +1,232 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Search, Plus, BookOpen, MoreHorizontal, CheckCircle2, Trash2,
+  Search,
+  FileText,
+  FolderOpen,
+  MoreVertical,
+  Trash2,
+  Pencil,
+  BookOpen,
+  Plus,
+  Grid3X3,
+  List,
 } from 'lucide-react'
-import AppLayout from '@/components/AppLayout'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
-const TOPICS = ['Tất cả', 'Cơ sở dữ liệu', 'Lập trình Python', 'Toán rời rạc', 'Mạng máy tính']
-const DOCS = [
-  { title: 'Giáo trình Cơ sở dữ liệu', type: 'PDF', topic: 'Cơ sở dữ liệu', chapters: 8, questions: 120, progress: 65, date: '10/04/2025' },
-  { title: 'Lập trình Python nâng cao', type: 'DOCX', topic: 'Lập trình Python', chapters: 12, questions: 180, progress: 40, date: '08/04/2025' },
-  { title: 'Toán rời rạc ứng dụng', type: 'PDF', topic: 'Toán rời rạc', chapters: 6, questions: 90, progress: 80, date: '05/04/2025' },
-  { title: 'Bài giảng Mạng máy tính', type: 'PDF', topic: 'Mạng máy tính', chapters: 10, questions: 150, progress: 20, date: '01/04/2025' },
-  { title: 'Đề cương ôn tập CSDL', type: 'DOCX', topic: 'Cơ sở dữ liệu', chapters: 4, questions: 60, progress: 100, date: '28/03/2025' },
-  { title: 'Python cho người mới bắt đầu', type: 'PDF', topic: 'Lập trình Python', chapters: 15, questions: 220, progress: 10, date: '25/03/2025' },
+const mockDocuments = [
+  { id: 1, title: 'Giáo trình Cơ sở dữ liệu', topic: 'CSDL', fileType: 'pdf', chapters: 8, questions: 64, progress: 65, fileSize: '4.2 MB', createdAt: '12/03/2026' },
+  { id: 2, title: 'Lập trình hướng đối tượng', topic: 'OOP', fileType: 'pdf', chapters: 12, questions: 120, progress: 40, fileSize: '6.8 MB', createdAt: '08/03/2026' },
+  { id: 3, title: 'Mạng máy tính', topic: 'Network', fileType: 'docx', chapters: 6, questions: 48, progress: 90, fileSize: '3.1 MB', createdAt: '05/03/2026' },
+  { id: 4, title: 'Cấu trúc dữ liệu và giải thuật', topic: 'DSA', fileType: 'pdf', chapters: 10, questions: 85, progress: 20, fileSize: '5.5 MB', createdAt: '01/03/2026' },
+  { id: 5, title: 'Hệ điều hành', topic: 'OS', fileType: 'pdf', chapters: 9, questions: 72, progress: 0, fileSize: '7.2 MB', createdAt: '25/02/2026' },
+  { id: 6, title: 'Trí tuệ nhân tạo', topic: 'AI', fileType: 'pdf', chapters: 7, questions: 56, progress: 55, fileSize: '4.9 MB', createdAt: '20/02/2026' },
 ]
-const TOPIC_COUNTS = TOPICS.map(t => t === 'Tất cả' ? DOCS.length : DOCS.filter(d => d.topic === t).length)
 
-const stagger = { animate: { transition: { staggerChildren: 0.05 } } }
-const fadeUp = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
+const topics = ['Tất cả', 'CSDL', 'OOP', 'Network', 'DSA', 'OS', 'AI']
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
 }
 
 export default function LibraryPage() {
-  const [activeTopic, setActiveTopic] = useState('Tất cả')
   const [search, setSearch] = useState('')
-  const navigate = useNavigate()
+  const [activeTopic, setActiveTopic] = useState('Tất cả')
+  const [viewMode, setViewMode] = useState('grid')
+  const [deleteDoc, setDeleteDoc] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(null)
 
-  const filtered = DOCS.filter(d =>
-    (activeTopic === 'Tất cả' || d.topic === activeTopic) &&
-    d.title.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = mockDocuments.filter((doc) => {
+    const matchSearch = doc.title.toLowerCase().includes(search.toLowerCase())
+    const matchTopic = activeTopic === 'Tất cả' || doc.topic === activeTopic
+    return matchSearch && matchTopic
+  })
 
   return (
-    <AppLayout>
-      <div className="p-10">
-        {/* Header */}
-        <motion.div {...fadeUp} className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-on-surface">Thư viện của tôi</h1>
-            <p className="text-sm text-muted mt-1.5">{DOCS.length} tài liệu · {DOCS.reduce((a, d) => a + d.questions, 0)} câu hỏi</p>
-          </div>
-          <Button onClick={() => navigate('/upload')}>
-            <Plus size={16} /> Tải lên tài liệu
-          </Button>
-        </motion.div>
-
-        {/* Search */}
-        <motion.div {...fadeUp} className="relative mb-8">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
-          <Input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm kiếm tài liệu theo tên..."
-            className="pl-11 shadow-sm"
-          />
-        </motion.div>
-
-        <div className="flex gap-8">
-          {/* Topic sidebar */}
-          <motion.aside
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.35 }}
-            className="w-48 shrink-0"
-          >
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3 px-1">Chủ đề</p>
-            <div className="space-y-1">
-              {TOPICS.map((t, i) => (
-                <button key={t} onClick={() => setActiveTopic(t)}
-                  className={cn(
-                    "w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 flex items-center justify-between",
-                    activeTopic === t
-                      ? "bg-primary text-on-primary font-semibold shadow-md shadow-primary/15"
-                      : "text-on-surface-variant font-medium hover:bg-surface-dim hover:text-primary"
-                  )}>
-                  <span>{t}</span>
-                  <span className={cn(
-                    "text-xs px-1.5 py-0.5 rounded-md",
-                    activeTopic === t ? "bg-white/20 text-white" : "bg-surface-container text-muted"
-                  )}>{TOPIC_COUNTS[i]}</span>
-                </button>
-              ))}
-              <div className="h-px bg-outline-variant my-2" />
-              <button className="w-full text-left px-3 py-2 rounded-xl text-sm text-primary font-medium hover:bg-surface-dim transition-colors duration-150 flex items-center gap-2">
-                <Plus size={14} /> Thêm chủ đề
-              </button>
-            </div>
-          </motion.aside>
-
-          {/* Grid */}
-          <div className="flex-1">
-            {filtered.length === 0 ? (
-              <motion.div {...fadeUp} className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="w-20 h-20 rounded-2xl bg-surface-container flex items-center justify-center mb-5">
-                  <BookOpen size={32} className="text-muted" />
-                </div>
-                <p className="text-on-surface font-semibold text-lg mb-1">Không tìm thấy tài liệu</p>
-                <p className="text-sm text-muted mb-5">Thử thay đổi bộ lọc hoặc tải lên tài liệu mới</p>
-                <Button onClick={() => navigate('/upload')}><Plus size={16} /> Tải lên tài liệu</Button>
-              </motion.div>
-            ) : (
-              <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filtered.map((doc) => (
-                  <DocCard key={doc.title} doc={doc} onStudy={() => navigate('/study')} />
-                ))}
-              </motion.div>
-            )}
-          </div>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
+      <motion.div variants={item} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Thư viện tài liệu</h1>
+          <p className="text-slate-500 text-sm mt-1">{mockDocuments.length} tài liệu</p>
         </div>
-      </div>
-    </AppLayout>
-  )
-}
-
-function DocCard({ doc, onStudy }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const progressGradient = doc.progress === 100 ? 'from-tertiary to-[#4A8885]' : undefined
-
-  return (
-    <motion.div variants={fadeUp}>
-      <Card className="group hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary-light opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Badge variant={doc.type === 'PDF' ? 'default' : 'tertiary'}>{doc.type}</Badge>
-              {doc.progress === 100 && <Badge variant="success"><CheckCircle2 size={10} /> Hoàn thành</Badge>}
-            </div>
-            <div className="relative">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMenuOpen(!menuOpen)}>
-                <MoreHorizontal size={14} />
-              </Button>
-              {menuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="absolute right-0 top-8 z-10 bg-white border border-outline-variant rounded-xl shadow-xl p-1 min-w-32"
-                >
-                  <button onClick={() => { setMenuOpen(false); onStudy() }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-surface-dim flex items-center gap-2 text-on-surface transition-colors">
-                    <BookOpen size={14} /> Học ngay
-                  </button>
-                  <button onClick={() => setMenuOpen(false)} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-error-container/30 flex items-center gap-2 text-error transition-colors">
-                    <Trash2 size={14} /> Xoá
-                  </button>
-                </motion.div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
-              <BookOpen size={18} className="text-muted" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-on-surface text-sm mb-1 leading-snug group-hover:text-primary transition-colors duration-200">{doc.title}</h3>
-              <p className="text-xs text-muted">{doc.chapters} chương · {doc.questions} câu · {doc.date}</p>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between text-xs mb-1.5">
-              <span className="text-muted font-medium">Tiến độ học</span>
-              <span className={cn("font-bold", doc.progress === 100 ? "text-tertiary" : "text-primary")}>{doc.progress}%</span>
-            </div>
-            <Progress value={doc.progress} indicatorClassName={progressGradient && `bg-gradient-to-r ${progressGradient}`} />
-          </div>
-
-          <Button className="w-full" size="sm" onClick={onStudy}>
-            {doc.progress === 100 ? 'Ôn tập lại' : 'Học ngay'} <BookOpen size={14} />
+        <Link to="/upload">
+          <Button>
+            <Plus className="h-4 w-4" />
+            Tải lên
           </Button>
-        </CardContent>
-      </Card>
+        </Link>
+      </motion.div>
+
+      <motion.div variants={item} className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Tìm kiếm tài liệu..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </motion.div>
+
+      <motion.div variants={item} className="flex gap-2 flex-wrap">
+        {topics.map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTopic(t)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              activeTopic === t
+                ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </motion.div>
+
+      {viewMode === 'grid' ? (
+        <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((doc) => (
+            <Card key={doc.id} className="p-5 group relative">
+              <CardContent>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+                    <FileText className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <div className="relative">
+                    <button
+                      onClick={() => setMenuOpen(menuOpen === doc.id ? null : doc.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                    {menuOpen === doc.id && (
+                      <div className="absolute right-0 top-8 z-10 w-36 bg-white rounded-xl py-1 shadow-lg border border-slate-200">
+                        <button className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">
+                          <Pencil className="h-3 w-3" /> Đổi tên
+                        </button>
+                        <button
+                          onClick={() => { setDeleteDoc(doc); setMenuOpen(null) }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" /> Xóa
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-semibold text-slate-800 mb-1 line-clamp-2">{doc.title}</h3>
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="secondary">{doc.topic}</Badge>
+                  <span className="text-xs text-slate-400">{doc.fileType.toUpperCase()}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
+                  <span>{doc.chapters} chương</span>
+                  <span>{doc.questions} câu hỏi</span>
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <Progress value={doc.progress} className="flex-1 h-1.5" />
+                  <span className="text-xs text-slate-500">{doc.progress}%</span>
+                </div>
+
+                <Link to={`/document/${doc.id}`}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Xem chi tiết
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </motion.div>
+      ) : (
+        <motion.div variants={item} className="space-y-2">
+          {filtered.map((doc) => (
+            <Card key={doc.id} className="p-4">
+              <CardContent className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+                  <FileText className="h-5 w-5 text-primary-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">{doc.title}</p>
+                  <p className="text-xs text-slate-400">{doc.chapters} chương · {doc.questions} câu hỏi · {doc.fileSize}</p>
+                </div>
+                <Badge variant="secondary">{doc.topic}</Badge>
+                <div className="flex items-center gap-2 w-32">
+                  <Progress value={doc.progress} className="flex-1 h-1.5" />
+                  <span className="text-xs text-slate-500">{doc.progress}%</span>
+                </div>
+                <Link to={`/document/${doc.id}`}>
+                  <Button variant="ghost" size="sm">
+                    <BookOpen className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ))}
+        </motion.div>
+      )}
+
+      {filtered.length === 0 && (
+        <div className="text-center py-16">
+          <FolderOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500">Không tìm thấy tài liệu nào</p>
+        </div>
+      )}
+
+      <Dialog open={!!deleteDoc} onOpenChange={() => setDeleteDoc(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa tài liệu</DialogTitle>
+            <DialogDescription>
+              Tài liệu &quot;{deleteDoc?.title}&quot; có {deleteDoc?.questions} câu hỏi liên kết.
+              Xóa tài liệu sẽ xóa toàn bộ câu hỏi đi kèm.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setDeleteDoc(null)}>Hủy</Button>
+            <Button variant="danger" onClick={() => setDeleteDoc(null)}>Xóa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

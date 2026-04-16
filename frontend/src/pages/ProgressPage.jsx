@@ -1,227 +1,207 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  CheckCircle, Target, Flame, Clock, BarChart3, BookOpen, AlertTriangle, Bookmark, StickyNote, TrendingUp,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from 'recharts'
+import {
+  Target,
+  BookOpen,
+  HelpCircle,
+  TrendingUp,
+  FileText,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
-import AppLayout from '@/components/AppLayout'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-const DAILY = [
-  { day: 'T2', count: 45 },
-  { day: 'T3', count: 80 },
-  { day: 'T4', count: 30 },
-  { day: 'T5', count: 95 },
-  { day: 'T6', count: 60 },
-  { day: 'T7', count: 120 },
-  { day: 'CN', count: 75 },
-]
-const MAX_COUNT = 120
-
-const DOCS = [
-  { title: 'Giáo trình Cơ sở dữ liệu', chapters: 8, done: 5, accuracy: 78 },
-  { title: 'Lập trình Python nâng cao', chapters: 12, done: 5, accuracy: 65 },
-  { title: 'Toán rời rạc ứng dụng', chapters: 6, done: 5, accuracy: 88 },
-  { title: 'Bài giảng Mạng máy tính', chapters: 10, done: 2, accuracy: 55 },
+const weeklyData = [
+  { day: 'T2', questions: 24, correct: 18 },
+  { day: 'T3', questions: 32, correct: 25 },
+  { day: 'T4', questions: 18, correct: 14 },
+  { day: 'T5', questions: 45, correct: 36 },
+  { day: 'T6', questions: 28, correct: 22 },
+  { day: 'T7', questions: 15, correct: 12 },
+  { day: 'CN', questions: 38, correct: 31 },
 ]
 
-const WEAK = [
-  { name: 'Chương 3 — Chuẩn hoá CSDL', accuracy: 42, wrong: 5 },
-  { name: 'Chương 7 — Hàm trong Python', accuracy: 53, wrong: 3 },
-  { name: 'Chương 2 — Lý thuyết đồ thị', accuracy: 38, wrong: 7 },
+const accuracyTrend = [
+  { week: 'Tuần 1', accuracy: 58 },
+  { week: 'Tuần 2', accuracy: 63 },
+  { week: 'Tuần 3', accuracy: 68 },
+  { week: 'Tuần 4', accuracy: 72 },
+  { week: 'Tuần 5', accuracy: 70 },
+  { week: 'Tuần 6', accuracy: 76 },
 ]
 
-const STATS = [
-  { label: 'Tổng câu đã học', value: '348', icon: CheckCircle, gradient: 'from-tertiary to-[#4A8885]' },
-  { label: 'Tỷ lệ đúng tổng', value: '76%', icon: Target, gradient: 'from-primary to-primary-light' },
-  { label: 'Chuỗi ngày dài nhất', value: '12 ngày', icon: Flame, gradient: 'from-secondary to-[#6B7A5F]' },
-  { label: 'Tổng thời gian học', value: '14 giờ', icon: Clock, gradient: 'from-primary to-tertiary' },
+const documentProgress = [
+  { id: 1, title: 'Giáo trình Cơ sở dữ liệu', chapters: 8, chaptersCompleted: 5, questions: 64, answered: 48, accuracy: 78, lastStudied: '2 giờ trước' },
+  { id: 2, title: 'Lập trình hướng đối tượng', chapters: 12, chaptersCompleted: 5, questions: 120, answered: 52, accuracy: 65, lastStudied: '1 ngày trước' },
+  { id: 3, title: 'Mạng máy tính', chapters: 6, chaptersCompleted: 5, questions: 48, answered: 44, accuracy: 82, lastStudied: '3 ngày trước' },
+  { id: 4, title: 'Cấu trúc dữ liệu và giải thuật', chapters: 10, chaptersCompleted: 2, questions: 85, answered: 18, accuracy: 61, lastStudied: '5 ngày trước' },
+  { id: 5, title: 'Trí tuệ nhân tạo', chapters: 7, chaptersCompleted: 4, questions: 56, answered: 35, accuracy: 71, lastStudied: '1 tuần trước' },
 ]
 
-const stagger = { animate: { transition: { staggerChildren: 0.06 } } }
-const fadeUp = {
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+const overviewStats = [
+  { label: 'Tài liệu đã học', value: '5/6', icon: BookOpen, color: 'text-primary-600', bg: 'bg-primary-50' },
+  { label: 'Tổng câu đã làm', value: '197', icon: HelpCircle, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { label: 'Độ chính xác TB', value: '76%', icon: Target, color: 'text-amber-600', bg: 'bg-amber-50' },
+  { label: 'Xu hướng', value: '+8%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+]
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white rounded-lg px-3 py-2 text-xs shadow-lg border border-slate-200">
+      <p className="text-slate-800 font-medium mb-1">{label}</p>
+      {payload.map((entry, i) => (
+        <p key={i} style={{ color: entry.color }}>
+          {entry.name}: {entry.value}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
 }
 
 export default function ProgressPage() {
-  const [range, setRange] = useState('week')
-  const navigate = useNavigate()
-
   return (
-    <AppLayout>
-      <div className="p-10 max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div {...fadeUp} className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-2xl font-bold text-on-surface">Tiến độ học tập</h1>
-            <p className="text-sm text-muted mt-1">Theo dõi quá trình học tập của bạn</p>
-          </div>
-          <Tabs value={range} onValueChange={setRange}>
-            <TabsList>
-              <TabsTrigger value="week">Tuần này</TabsTrigger>
-              <TabsTrigger value="month">Tháng này</TabsTrigger>
-              <TabsTrigger value="all">Tất cả</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </motion.div>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
+      <motion.div variants={item}>
+        <h1 className="text-2xl font-bold text-slate-900">Tiến độ học tập</h1>
+        <p className="text-slate-500 text-sm mt-1">Theo dõi kết quả và xu hướng</p>
+      </motion.div>
 
-        {/* Stats */}
-        <motion.div variants={stagger} initial="initial" animate="animate" className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
-          {STATS.map(s => (
-            <motion.div key={s.label} variants={fadeUp}>
-              <Card className="hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
-                <CardContent className="p-5">
-                  <div className={cn("inline-flex items-center justify-center w-12 h-12 rounded-xl mb-3 shadow-md bg-gradient-to-br", s.gradient)}>
-                    <s.icon size={20} className="text-white" />
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {overviewStats.map((s) => (
+          <Card key={s.label} className="p-5">
+            <CardContent className="flex items-center gap-4">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${s.bg}`}>
+                <s.icon className={`h-5 w-5 ${s.color}`} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900">{s.value}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </motion.div>
+
+      <Tabs defaultValue="charts">
+        <TabsList>
+          <TabsTrigger value="charts">Biểu đồ</TabsTrigger>
+          <TabsTrigger value="documents">Theo tài liệu</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="charts">
+          <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="p-5">
+              <CardContent>
+                <h3 className="text-sm font-semibold text-slate-800 mb-4">Câu hỏi theo ngày (tuần này)</h3>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="questions" name="Tổng câu" fill="#d1fae5" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="correct" name="Đúng" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="p-5">
+              <CardContent>
+                <h3 className="text-sm font-semibold text-slate-800 mb-4">Xu hướng độ chính xác</h3>
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={accuracyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} domain={[50, 100]} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <defs>
+                      <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="accuracy" name="Accuracy" stroke="#10b981" fill="url(#accuracyGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="documents">
+          <motion.div variants={item} className="space-y-3">
+            {documentProgress.map((doc) => (
+              <Card key={doc.id} className="p-5">
+                <CardContent>
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0 mt-0.5">
+                      <FileText className="h-5 w-5 text-primary-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold text-slate-800">{doc.title}</h3>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                          <Clock className="h-3 w-3" />
+                          {doc.lastStudied}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 mb-3">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Chương</p>
+                          <div className="flex items-center gap-2">
+                            <Progress value={(doc.chaptersCompleted / doc.chapters) * 100} className="flex-1 h-1.5" />
+                            <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapters}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Câu hỏi</p>
+                          <div className="flex items-center gap-2">
+                            <Progress value={(doc.answered / doc.questions) * 100} className="flex-1 h-1.5" />
+                            <span className="text-xs text-slate-600">{doc.answered}/{doc.questions}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1">Độ chính xác</p>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className={`h-3.5 w-3.5 ${doc.accuracy >= 75 ? 'text-emerald-500' : doc.accuracy >= 60 ? 'text-amber-500' : 'text-red-500'}`} />
+                            <span className={`text-sm font-medium ${doc.accuracy >= 75 ? 'text-emerald-600' : doc.accuracy >= 60 ? 'text-amber-600' : 'text-red-600'}`}>
+                              {doc.accuracy}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-3xl font-bold text-on-surface tracking-tight">{s.value}</p>
-                  <p className="text-xs text-muted mt-1 font-medium">{s.label}</p>
                 </CardContent>
               </Card>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Bar chart */}
-        <motion.div {...fadeUp}>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
-                  <BarChart3 size={16} className="text-muted" />
-                </div>
-                Hoạt động 7 ngày gần đây
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end gap-3 h-36">
-                {DAILY.map((d, i) => (
-                  <div key={d.day} className="flex-1 flex flex-col items-center gap-2 group">
-                    <span className="text-xs font-bold text-muted opacity-0 group-hover:opacity-100 transition-opacity duration-200">{d.count}</span>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${(d.count / MAX_COUNT) * 100}%` }}
-                      transition={{ delay: i * 0.08, duration: 0.5, ease: 'easeOut' }}
-                      className="w-full rounded-xl group-hover:scale-x-110 transition-transform duration-200"
-                      style={{
-                        background: d.count === MAX_COUNT
-                          ? 'linear-gradient(to top, #386663, #4A8885)'
-                          : 'linear-gradient(to top, #446732, #5E8B48)',
-                        opacity: 0.75 + (d.count / MAX_COUNT) * 0.25,
-                      }}
-                    />
-                    <span className={cn("text-xs font-medium", d.day === 'T7' ? "text-primary font-bold" : "text-muted")}>{d.day}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div {...fadeUp} className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Doc progress */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center">
-                  <BookOpen size={16} className="text-muted" />
-                </div>
-                Tiến độ theo tài liệu
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {DOCS.map(d => (
-                  <div key={d.title} className="p-3.5 rounded-xl hover:bg-surface-dim transition-all duration-200 -mx-1">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0 mr-2">
-                        <p className="text-sm font-semibold text-on-surface leading-snug truncate">{d.title}</p>
-                        <p className="text-xs text-muted">{d.done}/{d.chapters} chương</p>
-                      </div>
-                      <Badge variant={d.accuracy >= 75 ? 'success' : d.accuracy >= 60 ? 'secondary' : 'destructive'}>
-                        {d.accuracy}%
-                      </Badge>
-                    </div>
-                    <Progress value={(d.done / d.chapters) * 100} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Weak chapters */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-error-container to-[#FFE5E0] flex items-center justify-center">
-                    <AlertTriangle size={16} className="text-error" />
-                  </div>
-                  Điểm yếu cần ôn
-                </CardTitle>
-                <Badge variant="destructive">{WEAK.length} chương</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {WEAK.map((w, i) => (
-                  <div key={i} className="p-3.5 rounded-xl bg-gradient-to-r from-surface-dim to-white border border-outline-variant hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
-                    <div className="flex items-start justify-between mb-2.5">
-                      <p className="text-sm font-semibold text-on-surface leading-snug flex-1 mr-2">{w.name}</p>
-                      <Badge variant="destructive">{w.accuracy}%</Badge>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <Progress value={w.accuracy} indicatorClassName="bg-error" className="bg-error-container/50" />
-                        <p className="text-[11px] text-error mt-1 font-medium">{w.wrong} câu sai</p>
-                      </div>
-                      <Button size="sm" onClick={() => navigate('/study')}>Ôn tập</Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Bookmarks */}
-        <motion.div {...fadeUp}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-secondary-container to-primary-container flex items-center justify-center">
-                  <Bookmark size={16} className="text-primary" />
-                </div>
-                Bookmarks & Ghi chú
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { icon: Bookmark, label: 'Bookmarks', sub: '14 câu đã đánh dấu' },
-                  { icon: StickyNote, label: 'Ghi chú', sub: '8 ghi chú cá nhân' },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center gap-3.5 p-4 rounded-xl bg-gradient-to-r from-secondary-container/30 to-white border border-outline-variant hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center shadow-sm">
-                      <item.icon size={20} className="text-muted" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-on-surface">{item.label}</p>
-                      <p className="text-xs text-muted">{item.sub}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </AppLayout>
+            ))}
+          </motion.div>
+        </TabsContent>
+      </Tabs>
+    </motion.div>
   )
 }

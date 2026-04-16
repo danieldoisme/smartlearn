@@ -1,105 +1,80 @@
-import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { NavLink } from 'react-router-dom'
 import {
-  Home, Library, BookOpen, RotateCcw, ClipboardCheck, BarChart3, Settings, Flame,
+  LayoutDashboard,
+  Library,
+  Upload,
+  BookOpen,
+  ClipboardCheck,
+  BarChart3,
+  Bookmark,
+  RotateCcw,
+  Settings,
+  LogOut,
+  GraduationCap,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { cn } from '@/lib/utils'
 
-const NAV = [
-  { to: '/dashboard', label: 'Trang chủ',  icon: Home },
-  { to: '/library',   label: 'Thư viện',   icon: Library },
-  { to: '/study',     label: 'Học tập',     icon: BookOpen },
-  { to: '/review',    label: 'Ôn tập',      icon: RotateCcw },
-  { to: '/exam',      label: 'Kiểm tra',    icon: ClipboardCheck },
-  { to: '/progress',  label: 'Tiến độ',     icon: BarChart3 },
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Trang chủ' },
+  { to: '/library', icon: Library, label: 'Thư viện' },
+  { to: '/upload', icon: Upload, label: 'Tải lên' },
+  { to: '/study', icon: BookOpen, label: 'Học tập' },
+  { to: '/exam', icon: ClipboardCheck, label: 'Kiểm tra' },
+  { to: '/review', icon: RotateCcw, label: 'Ôn tập câu sai' },
+  { to: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
+  { to: '/progress', icon: BarChart3, label: 'Tiến độ' },
+  { to: '/settings', icon: Settings, label: 'Cài đặt' },
 ]
 
 export default function Sidebar() {
-  const { pathname } = useLocation()
-
   return (
-    <motion.aside
-      initial={{ x: -20, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="hidden lg:flex flex-col w-60 min-h-screen border-r border-outline-variant shrink-0 bg-gradient-to-b from-white to-surface"
-    >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-outline-variant">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-white font-bold text-base shadow-md ring-2 ring-primary-container/40">
-          S
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white/80 backdrop-blur-xl">
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-200/60">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-md shadow-primary-500/20">
+          <GraduationCap className="h-5 w-5 text-white" />
         </div>
         <div>
-          <span className="font-bold text-on-surface text-lg tracking-tight block leading-tight">SmartLearn</span>
-          <span className="text-[10px] text-muted font-medium tracking-wide">Học thông minh hơn</span>
+          <h1 className="text-base font-bold text-slate-900 tracking-tight">SmartLearn</h1>
+          <p className="text-[10px] text-slate-400 font-medium">Học thông minh hơn</p>
         </div>
       </div>
 
-      {/* Section label */}
-      <div className="px-5 pt-5 pb-2">
-        <span className="text-[10px] font-semibold text-muted uppercase tracking-widest">Điều hướng</span>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 space-y-0.5">
-        {NAV.map((item) => {
-          const active = pathname === item.to
-          const Icon = item.icon
-          return (
-            <Link
-              key={item.label}
-              to={item.to}
-              className={cn(
-                "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 relative",
-                active
-                  ? "bg-primary text-on-primary font-semibold shadow-md shadow-primary/20"
-                  : "text-on-surface-variant font-medium hover:bg-surface-dim hover:text-primary"
-              )}
-            >
-              <span className={cn(
-                "flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-200",
-                active ? "bg-white/20" : "bg-surface-container group-hover:bg-primary-container/40"
-              )}>
-                <Icon size={16} />
-              </span>
-              {item.label}
-              {active && (
-                <motion.div
-                  layoutId="nav-active-pill"
-                  className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-l-full bg-white/60"
-                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                />
-              )}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                isActive
+                  ? 'bg-primary-50 text-primary-700 shadow-sm border border-primary-100'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              )
+            }
+          >
+            <item.icon className="h-[18px] w-[18px]" />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
       </nav>
 
-      {/* Streak card */}
-      <div className="px-3 py-3">
-        <div className="rounded-xl p-3.5 bg-gradient-to-br from-primary-container/50 to-tertiary-container/40 border border-primary-container/30">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Flame size={16} className="text-primary" />
-            <span className="text-xs font-semibold text-primary">Chuỗi 7 ngày!</span>
+      <div className="border-t border-slate-200/60 px-3 py-4">
+        <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="text-xs">TH</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-700 truncate">Đức Thành</p>
+            <p className="text-xs text-slate-400 truncate">sinh viên</p>
           </div>
-          <p className="text-[11px] text-on-surface-variant leading-relaxed">Tiếp tục duy trì thói quen học tập tuyệt vời nhé!</p>
+          <button className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
-
-      {/* User */}
-      <div className="px-4 py-4 border-t border-outline-variant flex items-center gap-3">
-        <Avatar className="ring-2 ring-white shadow-md">
-          <AvatarFallback>Đ</AvatarFallback>
-        </Avatar>
-        <div className="overflow-hidden flex-1">
-          <p className="text-sm font-semibold text-on-surface truncate">Đức Thành</p>
-          <p className="text-[11px] text-muted truncate">B21DCCN676</p>
-        </div>
-        <button className="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-high flex items-center justify-center text-muted transition-all duration-150" aria-label="Cài đặt">
-          <Settings size={14} />
-        </button>
-      </div>
-    </motion.aside>
+    </aside>
   )
 }

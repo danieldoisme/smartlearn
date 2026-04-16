@@ -1,224 +1,198 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  Upload, FileText, X, Check, BookOpen, Search, Sparkles, ArrowLeft, ArrowRight, Loader2, PartyPopper,
+  Upload,
+  FileText,
+  File,
+  X,
+  Check,
+  CloudUpload,
+  FolderPlus,
 } from 'lucide-react'
-import AppLayout from '@/components/AppLayout'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/utils'
 
-const STEPS = ['Chọn file', 'Phân loại', 'Xử lý AI']
-const AI_STEPS = [
-  { label: 'Đọc file & trích xuất', icon: BookOpen },
-  { label: 'Phân tích chương & cấu trúc', icon: Search },
-  { label: 'Tạo câu hỏi bằng AI', icon: Sparkles },
-]
-
-const fadeUp = {
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-  exit: { opacity: 0, y: -8, transition: { duration: 0.2 } },
-}
+const topics = ['CSDL', 'OOP', 'Network', 'DSA', 'OS', 'AI']
 
 export default function UploadPage() {
-  const [step, setStep] = useState(0)
   const [file, setFile] = useState(null)
-  const [dragging, setDragging] = useState(false)
-  const [processing, setProcessing] = useState(false)
-  const [done, setDone] = useState(false)
-  const fileRef = useRef()
+  const [dragOver, setDragOver] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [selectedTopic, setSelectedTopic] = useState('')
+  const [newTopic, setNewTopic] = useState('')
+  const fileRef = useRef(null)
   const navigate = useNavigate()
 
-  const handleDrop = (e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]) }
-  const handleFileChange = (e) => { if (e.target.files[0]) setFile(e.target.files[0]) }
-  const simulateAI = () => { setProcessing(true); setTimeout(() => { setProcessing(false); setDone(true) }, 2500) }
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const dropped = e.dataTransfer.files[0]
+    if (dropped && (dropped.type === 'application/pdf' || dropped.name.endsWith('.docx'))) {
+      setFile(dropped)
+    }
+  }
+
+  const handleFileSelect = (e) => {
+    const selected = e.target.files[0]
+    if (selected) setFile(selected)
+  }
+
+  const handleUpload = () => {
+    setUploading(true)
+    setUploadProgress(0)
+    const interval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval)
+          setTimeout(() => navigate('/library'), 800)
+          return 100
+        }
+        return prev + Math.random() * 15 + 5
+      })
+    }, 300)
+  }
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
 
   return (
-    <AppLayout>
-      <div className="p-10 max-w-2xl mx-auto">
-        <motion.div {...fadeUp}>
-          <h1 className="text-2xl font-bold text-on-surface mb-2">Tải lên tài liệu</h1>
-          <p className="text-sm text-muted mb-10">Upload tài liệu PDF/DOCX để AI tự động tạo câu hỏi ôn tập</p>
-        </motion.div>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6 max-w-2xl mx-auto"
+    >
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Tải lên tài liệu</h1>
+        <p className="text-slate-500 text-sm mt-1">Hỗ trợ file PDF và DOCX</p>
+      </div>
 
-        {/* Stepper */}
-        <motion.div {...fadeUp} className="flex items-center mb-12">
-          {STEPS.map((s, i) => (
-            <div key={s} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center">
-                <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-300",
-                  i < step ? "bg-tertiary border-tertiary text-on-tertiary shadow-md shadow-tertiary/20"
-                    : i === step ? "bg-primary border-primary text-on-primary shadow-lg shadow-primary/25 scale-110"
-                    : "bg-white border-outline-variant text-muted"
-                )}>
-                  {i < step ? <Check size={16} /> : i + 1}
-                </div>
-                <span className={cn("text-xs mt-2 font-medium", i === step ? "text-primary font-semibold" : i < step ? "text-tertiary" : "text-muted")}>{s}</span>
+      {!file ? (
+        <Card
+          className={`p-12 border-2 border-dashed transition-all cursor-pointer ${
+            dragOver
+              ? 'border-primary-400 bg-primary-50/50'
+              : '!border-slate-200 hover:border-primary-300'
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+        >
+          <CardContent className="flex flex-col items-center text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 mb-4">
+              <CloudUpload className="h-8 w-8 text-primary-500" />
+            </div>
+            <p className="text-base font-medium text-slate-800 mb-1">
+              Kéo thả file vào đây
+            </p>
+            <p className="text-sm text-slate-500 mb-4">hoặc nhấn để chọn file</p>
+            <div className="flex gap-2">
+              <Badge variant="secondary">PDF</Badge>
+              <Badge variant="secondary">DOCX</Badge>
+            </div>
+          </CardContent>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+        </Card>
+      ) : (
+        <Card className="p-6">
+          <CardContent className="space-y-5">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+                {file.name.endsWith('.pdf') ? (
+                  <FileText className="h-6 w-6 text-primary-600" />
+                ) : (
+                  <File className="h-6 w-6 text-blue-600" />
+                )}
               </div>
-              {i < STEPS.length - 1 && (
-                <div className="flex-1 mx-3 mb-6">
-                  <div className="h-0.5 rounded-full bg-surface-container overflow-hidden">
-                    <div className={cn("h-0.5 rounded-full transition-all duration-700 ease-out", i < step ? "bg-tertiary w-full" : "bg-outline-variant w-0")} />
-                  </div>
-                </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{file.name}</p>
+                <p className="text-xs text-slate-400">{formatSize(file.size)}</p>
+              </div>
+              {!uploading && (
+                <button
+                  onClick={() => setFile(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
-          ))}
-        </motion.div>
 
-        <Card>
-          <CardContent className="p-8">
-            <AnimatePresence mode="wait">
-              {/* Step 0 */}
-              {step === 0 && (
-                <motion.div key="step0" {...fadeUp}>
-                  <h2 className="text-lg font-bold text-on-surface mb-1">Chọn file tài liệu</h2>
-                  <p className="text-sm text-muted mb-6">Hỗ trợ PDF và DOCX, tối đa 50MB</p>
-                  <div
-                    onDragOver={e => { e.preventDefault(); setDragging(true) }}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => fileRef.current?.click()}
-                    className={cn(
-                      "border-2 border-dashed rounded-2xl p-14 text-center cursor-pointer transition-all duration-300",
-                      dragging ? "border-primary bg-primary-container/15 scale-[1.02]" : "border-outline-variant hover:border-primary-light hover:bg-surface-dim"
-                    )}
-                  >
-                    <input ref={fileRef} type="file" accept=".pdf,.docx" className="hidden" onChange={handleFileChange} />
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-surface-container to-surface-highest flex items-center justify-center mx-auto mb-4">
-                      <Upload size={28} className="text-muted" />
-                    </div>
-                    <p className="font-semibold text-on-surface mb-1">Kéo thả file vào đây</p>
-                    <p className="text-sm text-muted">hoặc <span className="text-primary font-semibold cursor-pointer hover:underline underline-offset-2">chọn từ máy tính</span></p>
-                    <div className="flex items-center justify-center gap-3 mt-4">
-                      <Badge variant="outline">PDF</Badge>
-                      <Badge variant="outline">DOCX</Badge>
-                      <span className="text-xs text-muted">≤ 50MB</span>
-                    </div>
-                  </div>
-                  {file && (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                      className="mt-5 flex items-center justify-between p-4 rounded-xl bg-surface-dim border border-outline-variant">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-container to-primary flex items-center justify-center shadow-md">
-                          <FileText size={18} className="text-white" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-on-surface">{file.name}</p>
-                          <p className="text-xs text-muted">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => setFile(null)} className="text-error hover:bg-error-container/30">
-                        <X size={16} />
-                      </Button>
-                    </motion.div>
-                  )}
-                  <Button disabled={!file} onClick={() => setStep(1)} className="w-full mt-6" size="lg">
-                    Tiếp theo <ArrowRight size={16} />
-                  </Button>
-                </motion.div>
-              )}
+            {uploading && (
+              <div className="space-y-2">
+                <Progress value={Math.min(uploadProgress, 100)} className="h-2" />
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>{uploadProgress >= 100 ? 'Đang phân tích cấu trúc...' : 'Đang tải lên...'}</span>
+                  <span>{Math.min(Math.round(uploadProgress), 100)}%</span>
+                </div>
+              </div>
+            )}
 
-              {/* Step 1 */}
-              {step === 1 && (
-                <motion.div key="step1" {...fadeUp}>
-                  <h2 className="text-lg font-bold text-on-surface mb-1">Phân loại tài liệu</h2>
-                  <p className="text-sm text-muted mb-6">Giúp hệ thống tổ chức thư viện của bạn tốt hơn</p>
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-on-surface mb-1.5">Tên tài liệu</label>
-                      <Input defaultValue={file?.name?.replace(/\.[^.]+$/, '')} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-on-surface mb-1.5">Chủ đề</label>
-                      <select className="flex h-11 w-full rounded-xl border border-outline-variant bg-white px-4 py-2.5 text-sm text-on-surface transition-all duration-200 hover:border-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
-                        <option>Chọn chủ đề...</option>
-                        <option>Cơ sở dữ liệu</option>
-                        <option>Lập trình Python</option>
-                        <option>Toán rời rạc</option>
-                        <option>Mạng máy tính</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-on-surface mb-1.5">Mô tả <span className="text-muted font-normal">(tuỳ chọn)</span></label>
-                      <textarea rows={3} placeholder="Mô tả ngắn về nội dung tài liệu..."
-                        className="flex w-full rounded-xl border border-outline-variant bg-white px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary placeholder:text-outline-variant transition-all duration-200 hover:border-muted" />
-                    </div>
+            {!uploading && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-2">Chủ đề (tùy chọn)</label>
+                  <div className="flex gap-2 flex-wrap mb-2">
+                    {topics.map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setSelectedTopic(selectedTopic === t ? '' : t)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                          selectedTopic === t
+                            ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                            : 'text-slate-500 border border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex gap-3 mt-7">
-                    <Button variant="outline" onClick={() => setStep(0)} className="flex-1">
-                      <ArrowLeft size={16} /> Quay lại
-                    </Button>
-                    <Button onClick={() => { setStep(2); simulateAI() }} className="flex-1">
-                      Xử lý AI <Sparkles size={16} />
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Hoặc tạo chủ đề mới..."
+                      value={newTopic}
+                      onChange={(e) => setNewTopic(e.target.value)}
+                      className="text-xs"
+                    />
+                    <Button variant="outline" size="sm" disabled={!newTopic}>
+                      <FolderPlus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                </motion.div>
-              )}
+                </div>
 
-              {/* Step 2 */}
-              {step === 2 && (
-                <motion.div key="step2" {...fadeUp} className="text-center">
-                  <h2 className="text-lg font-bold text-on-surface mb-1">Xử lý bằng AI</h2>
-                  <p className="text-sm text-muted mb-8">Hệ thống đang phân tích tài liệu và tạo câu hỏi tự động</p>
+                <Button onClick={handleUpload} className="w-full" size="lg">
+                  <Upload className="h-4 w-4" />
+                  Tải lên và phân tích
+                </Button>
+              </>
+            )}
 
-                  <div className="space-y-3 text-left mb-8">
-                    {AI_STEPS.map((s, i) => {
-                      const isDone = done || (processing && i < 2)
-                      const isActive = processing && i === 2
-                      const Icon = s.icon
-                      return (
-                        <motion.div key={s.label}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.15, duration: 0.3 }}
-                          className={cn(
-                            "flex items-center gap-4 p-4 rounded-xl transition-all duration-300 border",
-                            isDone ? "bg-tertiary-container/30 border-tertiary/15" : isActive ? "bg-primary-container/20 border-primary/15" : "bg-surface-container/50 border-transparent"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
-                            isDone ? "bg-tertiary text-on-tertiary shadow-md shadow-tertiary/20" : isActive ? "bg-primary text-on-primary shadow-lg shadow-primary/25" : "bg-surface-highest text-muted"
-                          )}>
-                            {isDone ? <Check size={16} /> : isActive ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}
-                          </div>
-                          <div className="flex-1">
-                            <p className={cn("text-sm font-semibold", isDone ? "text-tertiary" : isActive ? "text-primary" : "text-muted")}>{s.label}</p>
-                            {isDone && <p className="text-xs text-tertiary/70">Hoàn thành</p>}
-                            {isActive && <p className="text-xs text-primary">Đang xử lý...</p>}
-                          </div>
-                        </motion.div>
-                      )
-                    })}
-                  </div>
-
-                  {done && (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
-                      <div className="p-6 rounded-2xl border border-tertiary/15 mb-6 bg-gradient-to-br from-tertiary-container to-secondary-container">
-                        <PartyPopper size={36} className="text-tertiary mx-auto mb-3" />
-                        <p className="text-3xl font-bold text-tertiary mb-1">8 chương · 120 câu hỏi</p>
-                        <p className="text-sm text-tertiary/80">Tài liệu đã sẵn sàng để học!</p>
-                      </div>
-                      <Button onClick={() => navigate('/study')} className="w-full" size="lg">
-                        Bắt đầu học ngay <ArrowRight size={16} />
-                      </Button>
-                    </motion.div>
-                  )}
-
-                  {processing && <Progress value={66} className="mt-4" />}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {uploadProgress >= 100 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 text-primary-600 text-sm"
+              >
+                <Check className="h-4 w-4" />
+                <span>Hoàn tất! Đang chuyển hướng...</span>
+              </motion.div>
+            )}
           </CardContent>
         </Card>
-      </div>
-    </AppLayout>
+      )}
+    </motion.div>
   )
 }
