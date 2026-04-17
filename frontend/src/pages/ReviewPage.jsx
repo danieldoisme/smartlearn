@@ -1,85 +1,26 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  RotateCcw,
   XCircle,
   FileText,
   Filter,
   Play,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Trophy,
-  HelpCircle,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { QuestionType, QuestionTypeLabel } from '@/models'
-
-// Review data: wrong UserAnswers joined with Question + Chapter + Document.
-// In production, this nested view comes from a dedicated API endpoint.
-const mockWrongQuestions = [
-  {
-    documentTitle: 'Giáo trình Cơ sở dữ liệu',
-    chapters: [
-      {
-        chapterId: 2,
-        title: 'Chương 2: Mô hình quan hệ',
-        questions: [
-          { id: 1, content: 'Dạng chuẩn 1NF yêu cầu điều gì?', questionType: QuestionType.MCQ, selectedAnswer: 'A', correctAnswer: 'B', attemptCount: 1, lastAnsweredAt: '2026-04-14T08:00:00Z' },
-          { id: 2, content: 'Ràng buộc NOT NULL thuộc loại nào?', questionType: QuestionType.MCQ, selectedAnswer: 'B', correctAnswer: 'A', attemptCount: 2, lastAnsweredAt: '2026-04-13T08:00:00Z' },
-        ],
-      },
-      {
-        chapterId: 3,
-        title: 'Chương 3: Đại số quan hệ',
-        questions: [
-          { id: 3, content: 'Phép chia (Division) trong đại số quan hệ dùng để làm gì?', questionType: QuestionType.MCQ, selectedAnswer: 'C', correctAnswer: 'A', attemptCount: 1, lastAnsweredAt: '2026-04-15T08:00:00Z' },
-        ],
-      },
-    ],
-  },
-  {
-    documentTitle: 'Lập trình hướng đối tượng',
-    chapters: [
-      {
-        chapterId: 9,
-        title: 'Chương 3: Kế thừa',
-        questions: [
-          { id: 4, content: 'Multiple inheritance gây ra vấn đề gì trong C++?', questionType: QuestionType.MCQ, selectedAnswer: 'A', correctAnswer: 'C', attemptCount: 1, lastAnsweredAt: '2026-04-11T08:00:00Z' },
-          { id: 5, content: 'Abstract class khác Interface ở điểm nào?', questionType: QuestionType.MULTI, selectedAnswer: 'A, B', correctAnswer: 'A, C, D', attemptCount: 3, lastAnsweredAt: '2026-04-12T08:00:00Z' },
-        ],
-      },
-      {
-        chapterId: 11,
-        title: 'Chương 5: Design Patterns',
-        questions: [
-          { id: 6, content: 'Singleton pattern đảm bảo điều gì?', questionType: QuestionType.FILL, selectedAnswer: 'một instance', correctAnswer: 'chỉ có một instance duy nhất', attemptCount: 1, lastAnsweredAt: '2026-04-10T08:00:00Z' },
-        ],
-      },
-    ],
-  },
-  {
-    documentTitle: 'Mạng máy tính',
-    chapters: [
-      {
-        chapterId: 15,
-        title: 'Chương 1: Mô hình OSI',
-        questions: [
-          { id: 7, content: 'Tầng nào chịu trách nhiệm định tuyến?', questionType: QuestionType.MCQ, selectedAnswer: 'B', correctAnswer: 'C', attemptCount: 1, lastAnsweredAt: '2026-04-09T08:00:00Z' },
-        ],
-      },
-    ],
-  },
-]
+import { useWrongQuestions } from '@/api/review'
 
 const typeFilters = ['all', QuestionType.MCQ, QuestionType.MULTI, QuestionType.FILL]
 const typeFilterLabels = { all: 'Tất cả', ...QuestionTypeLabel }
 
 function formatRelativeTime(isoDate) {
+  if (!isoDate) return '—'
   const diff = Date.now() - new Date(isoDate).getTime()
   const days = Math.floor(diff / 86400000)
   if (days === 0) return 'Hôm nay'
@@ -99,28 +40,45 @@ const item = {
 }
 
 export default function ReviewPage() {
+  const { data: docs = [], isLoading } = useWrongQuestions()
   const [typeFilter, setTypeFilter] = useState('all')
-  const [expandedDoc, setExpandedDoc] = useState(mockWrongQuestions[0]?.documentTitle)
+  const [expandedDoc, setExpandedDoc] = useState(null)
 
-  const totalWrong = mockWrongQuestions.reduce(
-    (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
-    0
+  const totalWrong = useMemo(
+    () =>
+      docs.reduce(
+        (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
+        0
+      ),
+    [docs]
   )
 
-  const filtered = mockWrongQuestions.map((doc) => ({
-    ...doc,
-    chapters: doc.chapters
-      .map((ch) => ({
-        ...ch,
-        questions: ch.questions.filter((q) => typeFilter === 'all' || q.questionType === typeFilter),
-      }))
-      .filter((ch) => ch.questions.length > 0),
-  })).filter((doc) => doc.chapters.length > 0)
+  const filtered = useMemo(
+    () =>
+      docs
+        .map((doc) => ({
+          ...doc,
+          chapters: doc.chapters
+            .map((ch) => ({
+              ...ch,
+              questions: ch.questions.filter(
+                (q) => typeFilter === 'all' || q.questionType === typeFilter
+              ),
+            }))
+            .filter((ch) => ch.questions.length > 0),
+        }))
+        .filter((doc) => doc.chapters.length > 0),
+    [docs, typeFilter]
+  )
 
   const filteredTotal = filtered.reduce(
     (sum, doc) => sum + doc.chapters.reduce((s, ch) => s + ch.questions.length, 0),
     0
   )
+
+  if (isLoading) {
+    return <div className="text-sm text-slate-500">Đang tải...</div>
+  }
 
   if (totalWrong === 0) {
     return (
@@ -222,7 +180,7 @@ export default function ReviewPage() {
                               <Badge variant={q.questionType === QuestionType.MCQ ? 'default' : q.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
                                 {QuestionTypeLabel[q.questionType]}
                               </Badge>
-                              <span className="text-red-500">Bạn: {q.selectedAnswer}</span>
+                              <span className="text-red-500">Bạn: {q.selectedAnswer || '—'}</span>
                               <span className="text-emerald-600">Đáp án: {q.correctAnswer}</span>
                               <span className="text-slate-400">Đã thử {q.attemptCount} lần · {formatRelativeTime(q.lastAnsweredAt)}</span>
                             </div>

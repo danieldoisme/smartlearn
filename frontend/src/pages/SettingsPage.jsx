@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   User,
@@ -16,8 +16,8 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { mockUser, mockUserPreference } from '@/mocks'
 import { QuestionType, DisplayMode, QuestionTypeLabel, DisplayModeLabel } from '@/models'
+import { useMe, useUpdateMe, useChangePassword, usePreferences, useUpdatePreferences } from '@/api/me'
 
 const questionTypes = [
   { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
@@ -39,23 +39,90 @@ const item = {
   show: { opacity: 1, y: 0 },
 }
 
+function initialsOf(name, email) {
+  const source = (name || email || '').trim()
+  if (!source) return '?'
+  const parts = source.split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 export default function SettingsPage() {
-  const [profile, setProfile] = useState({
-    fullName: mockUser.fullName,
-    email: mockUser.email,
-  })
+  const { data: me, isLoading: meLoading } = useMe()
+  const { data: prefs, isLoading: prefsLoading } = usePreferences()
+  const updateMe = useUpdateMe()
+  const changePassword = useChangePassword()
+  const updatePreferences = useUpdatePreferences()
+
+  const [profile, setProfile] = useState({ fullName: '', email: '' })
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [showOldPw, setShowOldPw] = useState(false)
   const [showNewPw, setShowNewPw] = useState(false)
   const [preferences, setPreferences] = useState({
-    defaultQuestionCount: mockUserPreference.defaultQuestionCount,
-    preferredQuestionType: mockUserPreference.preferredQuestionType,
-    answerDisplayMode: mockUserPreference.answerDisplayMode,
+    defaultQuestionCount: 10,
+    preferredQuestionType: QuestionType.MCQ,
+    answerDisplayMode: DisplayMode.IMMEDIATE,
   })
   const [saved, setSaved] = useState(null)
+  const [pwError, setPwError] = useState('')
 
-  const handleSave = (section) => {
+  useEffect(() => {
+    if (me) setProfile({ fullName: me.fullName || '', email: me.email || '' })
+  }, [me])
+
+  useEffect(() => {
+    if (prefs) {
+      setPreferences({
+        defaultQuestionCount: prefs.defaultQuestionCount,
+        preferredQuestionType: prefs.preferredQuestionType,
+        answerDisplayMode: prefs.answerDisplayMode,
+      })
+    }
+  }, [prefs])
+
+  const flash = (section) => {
     setSaved(section)
     setTimeout(() => setSaved(null), 2000)
+  }
+
+  const handleProfileSave = () => {
+    updateMe.mutate(
+      { fullName: profile.fullName, email: profile.email },
+      { onSuccess: () => flash('profile') }
+    )
+  }
+
+  const handlePasswordSave = (e) => {
+    e.preventDefault()
+    setPwError('')
+    if (!passwordForm.current || !passwordForm.next) {
+      setPwError('Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.')
+      return
+    }
+    if (passwordForm.next !== passwordForm.confirm) {
+      setPwError('Xác nhận mật khẩu không khớp.')
+      return
+    }
+    changePassword.mutate(
+      { currentPassword: passwordForm.current, newPassword: passwordForm.next },
+      {
+        onSuccess: () => {
+          setPasswordForm({ current: '', next: '', confirm: '' })
+          flash('password')
+        },
+        onError: (err) => {
+          setPwError(err?.response?.data?.detail || 'Đổi mật khẩu thất bại.')
+        },
+      }
+    )
+  }
+
+  const handlePreferencesSave = () => {
+    updatePreferences.mutate(preferences, { onSuccess: () => flash('preferences') })
+  }
+
+  if (meLoading || prefsLoading) {
+    return <div className="text-sm text-slate-500">Đang tải...</div>
   }
 
   return (
@@ -88,16 +155,16 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-5">
                   <div className="relative group">
                     <Avatar className="h-20 w-20">
-                      <AvatarFallback className="text-2xl">TH</AvatarFallback>
+                      <AvatarFallback className="text-2xl">{initialsOf(profile.fullName, profile.email)}</AvatarFallback>
                     </Avatar>
                     <button className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                       <Camera className="h-5 w-5 text-white" />
                     </button>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold text-slate-900">{profile.fullName}</p>
+                    <p className="text-lg font-semibold text-slate-900">{profile.fullName || '—'}</p>
                     <p className="text-sm text-slate-500">{profile.email}</p>
-                    {mockUser.emailVerified && <Badge variant="success" className="mt-1">Email đã xác nhận</Badge>}
+                    {me?.emailVerified && <Badge variant="success" className="mt-1">Email đã xác nhận</Badge>}
                   </div>
                 </div>
 
@@ -126,9 +193,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Button onClick={() => handleSave('profile')}>
+                  <Button onClick={handleProfileSave} disabled={updateMe.isPending}>
                     <Save className="h-4 w-4" />
-                    Lưu thay đổi
+                    {updateMe.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
                   </Button>
                   {saved === 'profile' && (
                     <motion.span
@@ -140,6 +207,11 @@ export default function SettingsPage() {
                       Cập nhật thành công
                     </motion.span>
                   )}
+                  {updateMe.error && (
+                    <span className="text-xs text-red-600">
+                      {updateMe.error?.response?.data?.detail || 'Lỗi cập nhật.'}
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -150,7 +222,7 @@ export default function SettingsPage() {
           <motion.div variants={item}>
             <Card className="p-6">
               <CardContent>
-                <form onSubmit={(e) => { e.preventDefault(); handleSave('password') }} className="space-y-4">
+                <form onSubmit={handlePasswordSave} className="space-y-4">
                   <input type="text" name="username" autoComplete="username" value={profile.email} readOnly hidden aria-hidden="true" />
                   <div>
                     <label htmlFor="currentPassword" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu hiện tại</label>
@@ -163,6 +235,8 @@ export default function SettingsPage() {
                         autoComplete="current-password"
                         placeholder="••••••••"
                         className="pl-10 pr-10"
+                        value={passwordForm.current}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
                       />
                       <button
                         type="button"
@@ -185,6 +259,8 @@ export default function SettingsPage() {
                         autoComplete="new-password"
                         placeholder="••••••••"
                         className="pl-10 pr-10"
+                        value={passwordForm.next}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}
                       />
                       <button
                         type="button"
@@ -200,14 +276,29 @@ export default function SettingsPage() {
                     <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-600 mb-1.5">Xác nhận mật khẩu mới</label>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" placeholder="••••••••" className="pl-10" />
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className="pl-10"
+                        value={passwordForm.confirm}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                      />
                     </div>
                   </div>
 
+                  {pwError && (
+                    <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      {pwError}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-3 pt-2">
-                    <Button type="submit">
+                    <Button type="submit" disabled={changePassword.isPending}>
                       <Save className="h-4 w-4" />
-                      Cập nhật mật khẩu
+                      {changePassword.isPending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
                     </Button>
                     {saved === 'password' && (
                       <motion.span
@@ -299,9 +390,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
-                  <Button onClick={() => handleSave('preferences')}>
+                  <Button onClick={handlePreferencesSave} disabled={updatePreferences.isPending}>
                     <Save className="h-4 w-4" />
-                    Lưu cài đặt
+                    {updatePreferences.isPending ? 'Đang lưu...' : 'Lưu cài đặt'}
                   </Button>
                   {saved === 'preferences' && (
                     <motion.span

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
+import ProtectedRoute from './components/ProtectedRoute'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -20,18 +21,20 @@ export default function App() {
     <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/library" element={<LibraryPage />} />
-          <Route path="/document/:id" element={<DocumentDetailPage />} />
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/study" element={<StudyPage />} />
-          <Route path="/exam" element={<ExamPage />} />
-          <Route path="/result" element={<ResultPage />} />
-          <Route path="/progress" element={<ProgressPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/bookmarks" element={<BookmarksPage />} />
-          <Route path="/review" element={<ReviewPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/document/:id" element={<DocumentDetailPage />} />
+            <Route path="/upload" element={<UploadPage />} />
+            <Route path="/study" element={<StudyPage />} />
+            <Route path="/exam" element={<ExamPage />} />
+            <Route path="/result" element={<ResultPage />} />
+            <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/bookmarks" element={<BookmarksPage />} />
+            <Route path="/review" element={<ReviewPage />} />
+          </Route>
         </Route>
       </Routes>
     </Suspense>

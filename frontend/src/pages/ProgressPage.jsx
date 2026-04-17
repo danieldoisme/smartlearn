@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart,
@@ -22,46 +23,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { mockDocuments, getTopicName } from '@/mocks'
-
-// Aggregated stats — in production these come from dedicated API endpoints
-const weeklyData = [
-  { day: 'T2', questions: 24, correct: 18 },
-  { day: 'T3', questions: 32, correct: 25 },
-  { day: 'T4', questions: 18, correct: 14 },
-  { day: 'T5', questions: 45, correct: 36 },
-  { day: 'T6', questions: 28, correct: 22 },
-  { day: 'T7', questions: 15, correct: 12 },
-  { day: 'CN', questions: 38, correct: 31 },
-]
-
-const accuracyTrend = [
-  { week: 'Tuần 1', accuracy: 58 },
-  { week: 'Tuần 2', accuracy: 63 },
-  { week: 'Tuần 3', accuracy: 68 },
-  { week: 'Tuần 4', accuracy: 72 },
-  { week: 'Tuần 5', accuracy: 70 },
-  { week: 'Tuần 6', accuracy: 76 },
-]
-
-// Enriched document progress built from Document model + computed study stats
-const documentProgress = mockDocuments.slice(0, 5).map((doc, i) => {
-  const stats = [
-    { chapterCount: 8, chaptersCompleted: 5, questionCount: 64, answeredCount: 48, accuracy: 78, lastStudied: '2 giờ trước' },
-    { chapterCount: 12, chaptersCompleted: 5, questionCount: 120, answeredCount: 52, accuracy: 65, lastStudied: '1 ngày trước' },
-    { chapterCount: 6, chaptersCompleted: 5, questionCount: 48, answeredCount: 44, accuracy: 82, lastStudied: '3 ngày trước' },
-    { chapterCount: 10, chaptersCompleted: 2, questionCount: 85, answeredCount: 18, accuracy: 61, lastStudied: '5 ngày trước' },
-    { chapterCount: 7, chaptersCompleted: 4, questionCount: 56, answeredCount: 35, accuracy: 71, lastStudied: '1 tuần trước' },
-  ][i]
-  return { ...doc, ...stats }
-})
-
-const overviewStats = [
-  { label: 'Tài liệu đã học', value: '5/6', icon: BookOpen, color: 'text-primary-600', bg: 'bg-primary-50' },
-  { label: 'Tổng câu đã làm', value: '197', icon: HelpCircle, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { label: 'Độ chính xác TB', value: '76%', icon: Target, color: 'text-amber-600', bg: 'bg-amber-50' },
-  { label: 'Xu hướng', value: '+8%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-]
+import { useWeekly, useAccuracyTrend, useDocumentsProgress } from '@/api/progress'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -87,6 +49,61 @@ const item = {
 }
 
 export default function ProgressPage() {
+  const { data: weeklyData = [], isLoading: wLoading } = useWeekly()
+  const { data: accuracyTrend = [], isLoading: aLoading } = useAccuracyTrend()
+  const { data: documentProgress = [], isLoading: dLoading } = useDocumentsProgress()
+
+  const overviewStats = useMemo(() => {
+    const totalDocs = documentProgress.length
+    const studiedDocs = documentProgress.filter((d) => (d.answeredCount || 0) > 0).length
+    const totalAnswered = documentProgress.reduce((acc, d) => acc + (d.answeredCount || 0), 0)
+    const avgAccuracy = documentProgress.length
+      ? Math.round(
+          documentProgress.reduce((acc, d) => acc + (d.accuracy || 0), 0) /
+            Math.max(documentProgress.filter((d) => (d.answeredCount || 0) > 0).length, 1)
+        )
+      : 0
+    const trendDelta = (() => {
+      if (accuracyTrend.length < 2) return 0
+      const first = accuracyTrend[0]?.accuracy || 0
+      const last = accuracyTrend[accuracyTrend.length - 1]?.accuracy || 0
+      return last - first
+    })()
+
+    return [
+      {
+        label: 'Tài liệu đã học',
+        value: totalDocs ? `${studiedDocs}/${totalDocs}` : '—',
+        icon: BookOpen,
+        color: 'text-primary-600',
+        bg: 'bg-primary-50',
+      },
+      {
+        label: 'Tổng câu đã làm',
+        value: String(totalAnswered),
+        icon: HelpCircle,
+        color: 'text-blue-600',
+        bg: 'bg-blue-50',
+      },
+      {
+        label: 'Độ chính xác TB',
+        value: `${avgAccuracy}%`,
+        icon: Target,
+        color: 'text-amber-600',
+        bg: 'bg-amber-50',
+      },
+      {
+        label: 'Xu hướng',
+        value: `${trendDelta >= 0 ? '+' : ''}${trendDelta}%`,
+        icon: TrendingUp,
+        color: trendDelta >= 0 ? 'text-emerald-600' : 'text-red-600',
+        bg: trendDelta >= 0 ? 'bg-emerald-50' : 'bg-red-50',
+      },
+    ]
+  }, [documentProgress, accuracyTrend])
+
+  const isLoading = wLoading || aLoading || dLoading
+
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
       <motion.div variants={item}>
@@ -141,7 +158,7 @@ export default function ProgressPage() {
                   <AreaChart data={accuracyTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} domain={[50, 100]} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} domain={[0, 100]} />
                     <Tooltip content={<CustomTooltip />} />
                     <defs>
                       <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
@@ -159,6 +176,10 @@ export default function ProgressPage() {
 
         <TabsContent value="documents">
           <motion.div variants={item} className="space-y-3">
+            {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
+            {!isLoading && documentProgress.length === 0 && (
+              <p className="text-sm text-slate-500">Chưa có dữ liệu học tập nào.</p>
+            )}
             {documentProgress.map((doc) => (
               <Card key={doc.id} className="p-5">
                 <CardContent>
@@ -171,7 +192,7 @@ export default function ProgressPage() {
                         <h3 className="text-sm font-semibold text-slate-800">{doc.title}</h3>
                         <div className="flex items-center gap-1.5 text-xs text-slate-400">
                           <Clock className="h-3 w-3" />
-                          {doc.lastStudied}
+                          {doc.lastStudied || '—'}
                         </div>
                       </div>
 
@@ -179,14 +200,14 @@ export default function ProgressPage() {
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Chương</p>
                           <div className="flex items-center gap-2">
-                            <Progress value={(doc.chaptersCompleted / doc.chapterCount) * 100} className="flex-1 h-1.5" />
+                            <Progress value={doc.chapterCount ? (doc.chaptersCompleted / doc.chapterCount) * 100 : 0} className="flex-1 h-1.5" />
                             <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapterCount}</span>
                           </div>
                         </div>
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Câu hỏi</p>
                           <div className="flex items-center gap-2">
-                            <Progress value={(doc.answeredCount / doc.questionCount) * 100} className="flex-1 h-1.5" />
+                            <Progress value={doc.questionCount ? (doc.answeredCount / doc.questionCount) * 100 : 0} className="flex-1 h-1.5" />
                             <span className="text-xs text-slate-600">{doc.answeredCount}/{doc.questionCount}</span>
                           </div>
                         </div>

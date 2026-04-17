@@ -9,6 +9,7 @@ services:
       - ./frontend:/app/frontend
       - ./package.json:/app/package.json
       - ./package-lock.json:/app/package-lock.json
+      - ./.env.development:/app/.env.development
       - /app/node_modules
     environment:
       - VITE_API_BASE_URL=http://localhost:8080

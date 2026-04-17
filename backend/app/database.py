@@ -4,9 +4,7 @@ from backend.app.config import settings
 
 # Create async engine
 engine = create_async_engine(
-    settings.get_database_url,
-    echo=settings.DEBUG,
-    future=True
+    settings.get_database_url, echo=settings.DEBUG, future=True
 )
 
 # Async session factory
@@ -18,8 +16,10 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
+
 class Base(DeclarativeBase):
     pass
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:

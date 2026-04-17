@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -26,21 +26,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { mockDocuments, mockTopics, mockChapters, getTopicName, formatFileSize } from '@/mocks'
+import { useTopics, useDocuments } from '@/api/library'
 
-// Enrich documents with computed view fields (would come from API in production)
-const documents = mockDocuments.map((doc) => {
-  const chapters = mockChapters.filter((ch) => ch.documentId === doc.id)
-  return {
-    ...doc,
-    topicName: getTopicName(doc.topicId),
-    chapterCount: chapters.length || [8, 12, 6, 10, 9, 7][doc.id - 1] || 0,
-    questionCount: [64, 120, 48, 85, 72, 56][doc.id - 1] || 0,
-    progress: [65, 40, 90, 20, 0, 55][doc.id - 1] || 0,
+function formatFileSize(bytes) {
+  if (!bytes) return '—'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let n = bytes
+  let i = 0
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
   }
-})
-
-const topicFilters = ['Tất cả', ...mockTopics.map((t) => t.name)]
+  return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -53,16 +51,18 @@ const item = {
 
 export default function LibraryPage() {
   const [search, setSearch] = useState('')
-  const [activeTopic, setActiveTopic] = useState('Tất cả')
+  const [activeTopicId, setActiveTopicId] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const [deleteDoc, setDeleteDoc] = useState(null)
   const [menuOpen, setMenuOpen] = useState(null)
 
-  const filtered = documents.filter((doc) => {
-    const matchSearch = doc.title.toLowerCase().includes(search.toLowerCase())
-    const matchTopic = activeTopic === 'Tất cả' || doc.topicName === activeTopic
-    return matchSearch && matchTopic
-  })
+  const { data: topics = [] } = useTopics()
+  const { data: documents = [], isLoading } = useDocuments(activeTopicId)
+
+  const filtered = useMemo(
+    () => documents.filter((doc) => doc.title.toLowerCase().includes(search.toLowerCase())),
+    [documents, search]
+  )
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
@@ -110,20 +110,32 @@ export default function LibraryPage() {
       </motion.div>
 
       <motion.div variants={item} className="flex gap-2 flex-wrap">
-        {topicFilters.map((t) => (
+        <button
+          onClick={() => setActiveTopicId(null)}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+            activeTopicId === null
+              ? 'bg-primary-50 text-primary-700 border border-primary-200'
+              : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
+          }`}
+        >
+          Tất cả
+        </button>
+        {topics.map((t) => (
           <button
-            key={t}
-            onClick={() => setActiveTopic(t)}
+            key={t.id}
+            onClick={() => setActiveTopicId(t.id)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-              activeTopic === t
+              activeTopicId === t.id
                 ? 'bg-primary-50 text-primary-700 border border-primary-200'
                 : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
             }`}
           >
-            {t}
+            {t.name}
           </button>
         ))}
       </motion.div>
+
+      {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
 
       {viewMode === 'grid' ? (
         <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -159,8 +171,8 @@ export default function LibraryPage() {
 
                 <h3 className="text-sm font-semibold text-slate-800 mb-1 line-clamp-2">{doc.title}</h3>
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="secondary">{doc.topicName}</Badge>
-                  <span className="text-xs text-slate-400">{doc.fileType.toUpperCase()}</span>
+                  {doc.topicName && <Badge variant="secondary">{doc.topicName}</Badge>}
+                  {doc.fileType && <span className="text-xs text-slate-400">{doc.fileType.toUpperCase()}</span>}
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
@@ -195,7 +207,7 @@ export default function LibraryPage() {
                   <p className="text-sm font-medium text-slate-800 truncate">{doc.title}</p>
                   <p className="text-xs text-slate-400">{doc.chapterCount} chương · {doc.questionCount} câu hỏi · {formatFileSize(doc.fileSize)}</p>
                 </div>
-                <Badge variant="secondary">{doc.topicName}</Badge>
+                {doc.topicName && <Badge variant="secondary">{doc.topicName}</Badge>}
                 <div className="flex items-center gap-2 w-32">
                   <Progress value={doc.progress} className="flex-1 h-1.5" />
                   <span className="text-xs text-slate-500">{doc.progress}%</span>
@@ -211,7 +223,7 @@ export default function LibraryPage() {
         </motion.div>
       )}
 
-      {filtered.length === 0 && (
+      {!isLoading && filtered.length === 0 && (
         <div className="text-center py-16">
           <FolderOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500">Không tìm thấy tài liệu nào</p>
