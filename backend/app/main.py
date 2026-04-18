@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List
 import httpx
@@ -18,6 +21,10 @@ from backend.app.routers import exam as exam_router
 from backend.app.routers import bookmark as bookmark_router
 
 app = FastAPI(title=settings.APP_NAME)
+
+UPLOADS_DIR = Path("backend/uploads")
+(UPLOADS_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(UPLOADS_DIR)), name="static")
 
 app.add_middleware(
     CORSMiddleware,

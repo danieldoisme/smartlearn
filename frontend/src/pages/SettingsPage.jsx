@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   User,
@@ -9,15 +9,29 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { QuestionType, DisplayMode, QuestionTypeLabel, DisplayModeLabel } from '@/models'
-import { useMe, useUpdateMe, useChangePassword, usePreferences, useUpdatePreferences } from '@/api/me'
+import {
+  useMe,
+  useUpdateMe,
+  useChangePassword,
+  usePreferences,
+  useUpdatePreferences,
+  useUploadAvatar,
+  useDeleteAvatar,
+  resolveAvatarUrl,
+} from '@/api/me'
+import { useAuth } from '@/auth/AuthContext'
+
+const ACCEPTED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
 const questionTypes = [
   { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
@@ -59,9 +73,14 @@ export default function SettingsPage() {
 }
 
 function SettingsContent({ me, prefs }) {
+  const { setUser } = useAuth()
   const updateMe = useUpdateMe()
   const changePassword = useChangePassword()
   const updatePreferences = useUpdatePreferences()
+  const uploadAvatar = useUploadAvatar()
+  const deleteAvatar = useDeleteAvatar()
+  const fileInputRef = useRef(null)
+  const [avatarError, setAvatarError] = useState('')
 
   const [profile, setProfile] = useState({ 
     fullName: me?.fullName || '', 
@@ -86,7 +105,12 @@ function SettingsContent({ me, prefs }) {
   const handleProfileSave = () => {
     updateMe.mutate(
       { fullName: profile.fullName, email: profile.email },
-      { onSuccess: () => flash('profile') }
+      {
+        onSuccess: (data) => {
+          setUser(data)
+          flash('profile')
+        },
+      }
     )
   }
 
@@ -119,6 +143,44 @@ function SettingsContent({ me, prefs }) {
     updatePreferences.mutate(preferences, { onSuccess: () => flash('preferences') })
   }
 
+  const handleAvatarPick = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setAvatarError('')
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarError('Định dạng ảnh không hỗ trợ. Dùng JPG, PNG, WEBP hoặc GIF.')
+      return
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError('Ảnh phải nhỏ hơn 2MB.')
+      return
+    }
+    uploadAvatar.mutate(file, {
+      onSuccess: (data) => {
+        setUser(data)
+        flash('avatar')
+      },
+      onError: (err) =>
+        setAvatarError(err?.response?.data?.detail || 'Tải ảnh thất bại.'),
+    })
+  }
+
+  const handleAvatarRemove = () => {
+    setAvatarError('')
+    deleteAvatar.mutate(undefined, {
+      onSuccess: (data) => {
+        setUser(data)
+        flash('avatar')
+      },
+      onError: (err) =>
+        setAvatarError(err?.response?.data?.detail || 'Xoá ảnh thất bại.'),
+    })
+  }
+
+  const avatarUrl = resolveAvatarUrl(me?.avatarUrl)
+  const avatarBusy = uploadAvatar.isPending || deleteAvatar.isPending
+
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-3xl">
       <motion.div variants={item}>
@@ -149,16 +211,73 @@ function SettingsContent({ me, prefs }) {
                 <div className="flex items-center gap-5">
                   <div className="relative group">
                     <Avatar className="h-20 w-20">
+                      {avatarUrl && <AvatarImage src={avatarUrl} alt={profile.fullName || profile.email} />}
                       <AvatarFallback className="text-2xl">{initialsOf(profile.fullName, profile.email)}</AvatarFallback>
                     </Avatar>
-                    <button className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={avatarBusy}
+                      aria-label="Tải ảnh đại diện"
+                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                    >
                       <Camera className="h-5 w-5 text-white" />
                     </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={ACCEPTED_AVATAR_TYPES.join(',')}
+                      className="hidden"
+                      onChange={handleAvatarPick}
+                    />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-lg font-semibold text-slate-900">{profile.fullName || '—'}</p>
                     <p className="text-sm text-slate-500">{profile.email}</p>
                     {me?.emailVerified && <Badge variant="success" className="mt-1">Email đã xác nhận</Badge>}
+                    <div className="flex items-center gap-3 mt-3 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={avatarBusy}
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        {uploadAvatar.isPending
+                          ? 'Đang tải...'
+                          : avatarUrl
+                            ? 'Đổi ảnh'
+                            : 'Tải ảnh đại diện'}
+                      </Button>
+                      {avatarUrl && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleAvatarRemove}
+                          disabled={avatarBusy}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {deleteAvatar.isPending ? 'Đang xoá...' : 'Xoá ảnh'}
+                        </Button>
+                      )}
+                      {saved === 'avatar' && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center gap-1.5 text-xs text-emerald-600"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Đã cập nhật ảnh
+                        </motion.span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">JPG, PNG, WEBP hoặc GIF. Tối đa 2MB.</p>
+                    {avatarError && (
+                      <p className="text-xs text-red-600 mt-1">{avatarError}</p>
+                    )}
                   </div>
                 </div>
 

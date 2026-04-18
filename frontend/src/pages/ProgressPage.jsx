@@ -144,7 +144,7 @@ export default function ProgressPage() {
                     <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="questions" name="Tổng câu" fill="#d1fae5" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="questions" name="Tổng câu" fill="#6ee7b7" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="correct" name="Đúng" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

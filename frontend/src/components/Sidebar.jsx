@@ -12,8 +12,9 @@ import {
   LogOut,
   GraduationCap,
 } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/auth/AuthContext'
+import { resolveAvatarUrl } from '@/api/me'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -76,6 +77,9 @@ export default function Sidebar() {
       <div className="border-t border-slate-200/60 px-3 py-4">
         <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
           <Avatar className="h-8 w-8">
+            {user?.avatarUrl && (
+              <AvatarImage src={resolveAvatarUrl(user.avatarUrl)} alt={displayName} />
+            )}
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">

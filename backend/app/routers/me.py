@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +12,16 @@ from backend.app.schemas.preferences import UserPreferenceOut, UserPreferenceUpd
 from backend.app.schemas.user import PasswordChange, UserOut, UserUpdate
 
 router = APIRouter(tags=["me"])
+
+AVATAR_DIR = Path("backend/uploads/avatars")
+AVATAR_URL_PREFIX = "/static/avatars"
+ALLOWED_AVATAR_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
 @router.get("/me", response_model=UserOut)
@@ -34,6 +47,65 @@ async def update_me(
             continue
         setattr(current, key, value)
 
+    await db.commit()
+    await db.refresh(current)
+    return UserOut.model_validate(current)
+
+
+@router.post("/me/avatar", response_model=UserOut)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ext = ALLOWED_AVATAR_TYPES.get(file.content_type)
+    if ext is None:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "Only JPEG, PNG, WEBP, or GIF images are allowed",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "Avatar must be 2MB or smaller",
+        )
+    if not contents:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty file")
+
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{current.id}-{uuid.uuid4().hex}{ext}"
+    target = AVATAR_DIR / filename
+    target.write_bytes(contents)
+
+    if current.avatar_url and current.avatar_url.startswith(AVATAR_URL_PREFIX + "/"):
+        old = AVATAR_DIR / current.avatar_url.rsplit("/", 1)[-1]
+        if old.exists() and old != target:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
+    current.avatar_url = f"{AVATAR_URL_PREFIX}/{filename}"
+    await db.commit()
+    await db.refresh(current)
+    return UserOut.model_validate(current)
+
+
+@router.delete("/me/avatar", response_model=UserOut)
+async def delete_avatar(
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current.avatar_url and current.avatar_url.startswith(AVATAR_URL_PREFIX + "/"):
+        target = AVATAR_DIR / current.avatar_url.rsplit("/", 1)[-1]
+        if target.exists():
+            try:
+                target.unlink()
+            except OSError:
+                pass
+    current.avatar_url = None
     await db.commit()
     await db.refresh(current)
     return UserOut.model_validate(current)
