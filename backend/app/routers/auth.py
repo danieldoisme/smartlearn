@@ -1,16 +1,19 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import settings
 from backend.app.core.deps import get_db
 from backend.app.core.security import (
     create_access_token,
-    create_password_reset_token,
-    decode_password_reset_token,
+    generate_reset_token_plain,
     hash_password,
+    hash_reset_token,
     verify_password,
 )
-from backend.app.models.user import User, UserPreference
+from backend.app.models.user import PasswordResetToken, User, UserPreference
 from backend.app.schemas.auth import (
     LoginRequest,
     PasswordResetConfirmIn,
@@ -20,8 +23,14 @@ from backend.app.schemas.auth import (
     TokenResponse,
 )
 from backend.app.schemas.user import UserOut
+from backend.app.services.email import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_GENERIC_RESET_MESSAGE = (
+    "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi liên kết đặt lại mật khẩu. "
+    "Vui lòng kiểm tra hộp thư (kể cả thư rác)."
+)
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -68,33 +77,69 @@ async def request_password_reset(
 ):
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Email chưa được đăng ký")
 
-    return PasswordResetRequestOut(
-        message="Đã tạo mã đặt lại mật khẩu.",
-        reset_token=create_password_reset_token(user.email),
+    if user is None:
+        return PasswordResetRequestOut(message=_GENERIC_RESET_MESSAGE)
+
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
     )
+
+    plain = generate_reset_token_plain()
+    token_row = PasswordResetToken(
+        user_id=user.id,
+        token_hash=hash_reset_token(plain),
+        expires_at=now + timedelta(minutes=settings.RESET_TOKEN_TTL_MINUTES),
+    )
+    db.add(token_row)
+    await db.commit()
+
+    reset_url = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/reset-password?token={plain}"
+    await send_password_reset_email(user.email, reset_url)
+
+    return PasswordResetRequestOut(message=_GENERIC_RESET_MESSAGE)
 
 
 @router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
 async def confirm_password_reset(
     payload: PasswordResetConfirmIn, db: AsyncSession = Depends(get_db)
 ):
-    try:
-        token_payload = decode_password_reset_token(payload.token)
-        email = token_payload.get("sub")
-    except Exception:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Mã đặt lại mật khẩu không hợp lệ"
+    token_hash = hash_reset_token(payload.token)
+    row = (
+        await db.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token_hash == token_hash
+            )
         )
+    ).scalar_one_or_none()
+
+    invalid = HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+    )
+    if row is None or row.used_at is not None:
+        raise invalid
+
+    expires_at = row.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if expires_at < now:
+        raise invalid
 
     user = (
-        await db.execute(select(User).where(User.email == email))
+        await db.execute(select(User).where(User.id == row.user_id))
     ).scalar_one_or_none()
     if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tài khoản không tồn tại")
+        raise invalid
 
     user.password_hash = hash_password(payload.new_password)
+    row.used_at = now
     await db.commit()
     return None

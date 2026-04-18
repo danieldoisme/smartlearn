@@ -4,6 +4,7 @@ import AppLayout from './components/AppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LibraryPage = lazy(() => import('./pages/LibraryPage'))
 const DocumentDetailPage = lazy(() => import('./pages/DocumentDetailPage'))
@@ -21,6 +22,7 @@ export default function App() {
     <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />

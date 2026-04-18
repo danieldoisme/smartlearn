@@ -20,6 +20,16 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:5173"
 
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 465
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: str = "SmartLearn <onboarding@resend.dev>"
+    SMTP_USE_SSL: bool = True
+    RESET_TOKEN_TTL_MINUTES: int = 30
+
     APP_NAME: str = "SmartLearn AI"
     DEBUG: bool = False
 

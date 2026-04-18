@@ -27,7 +27,6 @@ class PasswordResetRequestIn(CamelModel):
 
 class PasswordResetRequestOut(CamelModel):
     message: str
-    reset_token: str
 
 
 class PasswordResetConfirmIn(CamelModel):

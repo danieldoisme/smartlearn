@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -40,16 +42,9 @@ def decode_access_token(token: str) -> dict:
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
 
 
-def create_password_reset_token(email: str, expires_minutes: int = 30) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    payload = {"sub": email, "exp": expire, "purpose": "password_reset"}
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+def generate_reset_token_plain() -> str:
+    return secrets.token_urlsafe(48)
 
 
-def decode_password_reset_token(token: str) -> dict:
-    payload = jwt.decode(
-        token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
-    )
-    if payload.get("purpose") != "password_reset":
-        raise jwt.InvalidTokenError("Invalid reset token")
-    return payload
+def hash_reset_token(plain: str) -> str:
+    return hashlib.sha256(plain.encode("utf-8")).hexdigest()

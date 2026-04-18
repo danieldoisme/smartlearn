@@ -221,9 +221,12 @@ export default function ExamPage() {
     if (question.questionType === QuestionType.FILL) {
       return (
         <Input
+          id={`question-input-${question.id}`}
+          name={`question-input-${question.id}`}
           value={answers[question.id] || ''}
           onChange={(e) => setAnswerForQuestion(question.id, e.target.value)}
           placeholder="Nhập đáp án..."
+          aria-labelledby={`question-text-${question.id}`}
         />
       )
     }
@@ -283,10 +286,10 @@ export default function ExamPage() {
         <Card className="p-6">
           <CardContent className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-800 mb-2">
+              <div id="chapters-label" className="block text-sm font-medium text-slate-800 mb-2">
                 Chương tham gia đề thi
-              </label>
-              <div className="flex flex-wrap gap-2">
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="chapters-label">
                 <button
                   type="button"
                   onClick={() => setConfig((prev) => ({ ...prev, selectedChapterIds: [] }))}
@@ -316,10 +319,10 @@ export default function ExamPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-800 mb-2">
+              <div id="question-type-label" className="block text-sm font-medium text-slate-800 mb-2">
                 Loại câu hỏi
-              </label>
-              <div className="flex flex-wrap gap-2">
+              </div>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="question-type-label">
                 {QUESTION_TYPE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
@@ -339,10 +342,12 @@ export default function ExamPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-800 mb-2">
+                <label htmlFor="questionLimit" className="block text-sm font-medium text-slate-800 mb-2">
                   Số lượng câu hỏi
                 </label>
                 <Input
+                  id="questionLimit"
+                  name="questionLimit"
                   type="number"
                   min="1"
                   max="100"
@@ -356,10 +361,12 @@ export default function ExamPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-800 mb-2">
+                <label htmlFor="timeLimitMinutes" className="block text-sm font-medium text-slate-800 mb-2">
                   Thời gian (phút)
                 </label>
                 <Input
+                  id="timeLimitMinutes"
+                  name="timeLimitMinutes"
                   type="number"
                   min="1"
                   max="240"
@@ -454,7 +461,7 @@ export default function ExamPage() {
                     </Badge>
                   </div>
 
-                  <p className="text-base text-slate-800 font-medium leading-relaxed vn-text">{question.content}</p>
+                  <p id={`question-text-${question.id}`} className="text-base text-slate-800 font-medium leading-relaxed vn-text">{question.content}</p>
                   {renderQuestionBody()}
                 </CardContent>
               </Card>

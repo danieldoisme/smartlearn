@@ -32,6 +32,15 @@ Table users {
   updated_at DATETIME [note: 'Thời điểm cập nhật gần nhất']
 }
 
+Table password_reset_tokens {
+  id INT [pk, increment, note: 'Khóa chính, tự tăng']
+  user_id INT [note: 'FK -> users(id)']
+  token_hash VARCHAR(64) [unique, note: 'SHA-256 hash của token đặt lại mật khẩu']
+  expires_at DATETIME [note: 'Thời điểm hết hạn']
+  used_at DATETIME [null, note: 'Thời điểm sử dụng, null nếu chưa dùng']
+  created_at DATETIME [note: 'Thời điểm phát hành']
+}
+
 Table user_preferences {
   id INT [pk, increment, note: 'Khóa chính, tự tăng']
   user_id INT [unique, note: 'FK -> users(id), UNIQUE']
@@ -172,3 +181,4 @@ Ref: bookmarks.chapter_id > chapters.id
 Ref: notes.user_id > users.id
 Ref: notes.bookmark_id > bookmarks.id
 Ref: notes.question_id > questions.id
+Ref: password_reset_tokens.user_id > users.id
