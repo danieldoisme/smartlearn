@@ -13,6 +13,7 @@ import {
   GraduationCap,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useAuth } from '@/auth/AuthContext'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -28,6 +29,17 @@ const navItems = [
 ]
 
 export default function Sidebar() {
+  const { user, logout } = useAuth()
+  const displayName = user?.fullName?.trim() || 'Người dùng'
+  const displayEmail = user?.email?.trim() || '—'
+  const initials = (user?.fullName || user?.email || 'U')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'U'
+
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white/80 backdrop-blur-xl">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-200/60">
@@ -64,13 +76,19 @@ export default function Sidebar() {
       <div className="border-t border-slate-200/60 px-3 py-4">
         <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
           <Avatar className="h-8 w-8">
-            <AvatarFallback className="text-xs">TH</AvatarFallback>
+            <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-700 truncate">Đức Thành</p>
-            <p className="text-xs text-slate-400 truncate">sinh viên</p>
+            <p className="text-sm font-medium text-slate-700 truncate">{displayName}</p>
+            <p className="text-xs text-slate-400 truncate">{displayEmail}</p>
           </div>
-          <button className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>

@@ -35,3 +35,22 @@ export function useRegister() {
     },
   });
 }
+
+export function useRequestPasswordReset() {
+  return useMutation({
+    mutationFn: async ({ email }) =>
+      (await apiClient.post('/auth/password-reset/request', { email })).data,
+  });
+}
+
+export function useConfirmPasswordReset() {
+  return useMutation({
+    mutationFn: async ({ token, newPassword }) => {
+      await apiClient.post('/auth/password-reset/confirm', {
+        token,
+        newPassword,
+      });
+      return true;
+    },
+  });
+}

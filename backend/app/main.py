@@ -13,6 +13,9 @@ from backend.app.routers import progress as progress_router
 from backend.app.routers import review as review_router
 from backend.app.routers import library as library_router
 from backend.app.routers import dashboard as dashboard_router
+from backend.app.routers import study as study_router
+from backend.app.routers import exam as exam_router
+from backend.app.routers import bookmark as bookmark_router
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -73,6 +76,9 @@ app.include_router(progress_router.router)
 app.include_router(review_router.router)
 app.include_router(library_router.router)
 app.include_router(dashboard_router.router)
+app.include_router(study_router.router)
+app.include_router(exam_router.router)
+app.include_router(bookmark_router.router)
 
 
 if __name__ == "__main__":

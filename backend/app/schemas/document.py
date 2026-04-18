@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Optional
 
+from pydantic import Field
+
 from backend.app.models.enums import FileType
 from backend.app.schemas.base import CamelModel
 
@@ -17,6 +19,18 @@ class DocumentOut(CamelModel):
     updated_at: datetime
 
 
+class DocumentUploadIn(CamelModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    file_content_base64: str = Field(min_length=1)
+    title: Optional[str] = Field(default=None, max_length=255)
+    topic_id: Optional[int] = None
+    topic_name: Optional[str] = Field(default=None, max_length=100)
+
+
+class DocumentUpdateIn(CamelModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+
+
 class LibraryDocumentOut(DocumentOut):
     topic_name: Optional[str] = None
     chapter_count: int = 0
@@ -31,3 +45,28 @@ class ChapterOut(CamelModel):
     order_index: int
     page_start: Optional[int] = None
     page_end: Optional[int] = None
+    content_text: Optional[str] = None
+
+
+class ChapterWithStats(ChapterOut):
+    question_count: int = 0
+    answered_count: int = 0
+    correct_count: int = 0
+    accuracy: int = 0
+
+
+class DocumentDetailOut(LibraryDocumentOut):
+    chapters: list[ChapterWithStats] = []
+    total_questions: int = 0
+    total_answered: int = 0
+
+
+class ChapterStructureIn(CamelModel):
+    title: str = Field(min_length=1, max_length=255)
+    content_text: str = Field(default="")
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+
+
+class DocumentStructureUpdateIn(CamelModel):
+    chapters: list[ChapterStructureIn] = Field(min_length=1, max_length=100)

@@ -1,7 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-const badgeVariants = cva(
+export const badgeVariants = cva(
   'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
   {
     variants: {
@@ -20,8 +21,7 @@ const badgeVariants = cva(
   }
 )
 
-function Badge({ className, variant, ...props }) {
+export function Badge({ className, variant, ...props }) {
   return <span className={cn(badgeVariants({ variant }), className)} {...props} />
 }
 
-export { Badge, badgeVariants }

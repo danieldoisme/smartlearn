@@ -19,3 +19,17 @@ class TokenResponse(CamelModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
+class PasswordResetRequestIn(CamelModel):
+    email: EmailStr
+
+
+class PasswordResetRequestOut(CamelModel):
+    message: str
+    reset_token: str
+
+
+class PasswordResetConfirmIn(CamelModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=6, max_length=128)

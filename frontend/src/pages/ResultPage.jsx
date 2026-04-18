@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Trophy,
@@ -11,42 +12,90 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react'
-import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { mockExam, mockExamResults, mockExamQuestions } from '@/mocks'
+import {
+  useBookmarks,
+  useCreateBookmark,
+  useDeleteBookmark,
+} from '@/api/bookmarks'
+import { useExamResult } from '@/api/exam'
 
-// Build result view by joining Exam + ExamQuestion + Question models
-const examResult = {
-  ...mockExam,
-  correct: mockExamResults.filter((eq) => eq.isCorrect).length,
-  wrong: mockExamResults.filter((eq) => !eq.isCorrect && eq.selectedAnswer !== null).length,
-  skipped: mockExamResults.filter((eq) => eq.selectedAnswer === null).length,
-  timeTaken: '18:42',
-  questions: mockExamResults.map((eq) => {
-    const question = mockExamQuestions.find((q) => q.id === eq.questionId)
-    const correctOption = question?.options.find((o) => o.isCorrect)
-    return {
-      id: eq.id,
-      questionId: eq.questionId,
-      orderIndex: eq.orderIndex,
-      content: question?.content ?? '',
-      selectedAnswer: eq.selectedAnswer,
-      correctAnswer: correctOption?.label ?? '',
-      isCorrect: eq.isCorrect,
-      isSkipped: eq.selectedAnswer === null,
-      sourcePage: question?.sourcePage ?? null,
-    }
-  }),
+function formatDuration(startedAt, completedAt) {
+  if (!startedAt || !completedAt) return '--:--'
+  const diffMs = new Date(completedAt).getTime() - new Date(startedAt).getTime()
+  if (Number.isNaN(diffMs) || diffMs < 0) return '--:--'
+  const totalSec = Math.floor(diffMs / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 export default function ResultPage() {
+  const [searchParams] = useSearchParams()
+  const examIdRaw = searchParams.get('examId')
+  const examId = examIdRaw ? Number(examIdRaw) : null
+  const { data, isLoading, isError } = useExamResult(examId)
+  const { data: bookmarks = [] } = useBookmarks()
+  const createBookmark = useCreateBookmark()
+  const deleteBookmark = useDeleteBookmark()
   const [expandedQ, setExpandedQ] = useState(null)
-  const { totalQuestions, correct, wrong, skipped, score, timeTaken, questions } = examResult
 
-  const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
-  const scoreBg = score >= 80 ? 'from-emerald-50' : score >= 60 ? 'from-amber-50' : 'from-red-50'
+  if (!examId) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center space-y-3">
+        <p className="text-slate-600">Không tìm thấy kết quả. Vui lòng làm bài kiểm tra trước.</p>
+        <Link to="/library">
+          <Button variant="outline">Về thư viện</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center text-slate-500">
+        Đang tải kết quả...
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center space-y-3">
+        <p className="text-slate-600">Không thể tải kết quả.</p>
+        <Link to="/">
+          <Button variant="outline">Về trang chủ</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  const {
+    score = 0,
+    correctCount = 0,
+    wrongCount = 0,
+    skippedCount = 0,
+    totalQuestions = 0,
+    startedAt,
+    completedAt,
+    results = [],
+  } = data
+
+  const timeTaken = formatDuration(startedAt, completedAt)
+  const scoreValue = Number(score) || 0
+  const scoreColor = scoreValue >= 80 ? 'text-emerald-600' : scoreValue >= 60 ? 'text-amber-600' : 'text-red-600'
+  const scoreBg = scoreValue >= 80 ? 'from-emerald-50' : scoreValue >= 60 ? 'from-amber-50' : 'from-red-50'
+
+  const toggleBookmark = async (questionId) => {
+    const existing = bookmarks.find((bookmark) => bookmark.questionId === questionId)
+    if (existing) {
+      await deleteBookmark.mutateAsync(existing.id)
+      return
+    }
+    await createBookmark.mutateAsync({ questionId })
+  }
 
   return (
     <motion.div
@@ -60,21 +109,21 @@ export default function ResultPage() {
             <Trophy className={`h-8 w-8 ${scoreColor}`} />
           </div>
           <div>
-            <p className={`text-5xl font-bold ${scoreColor}`}>{score}%</p>
+            <p className={`text-5xl font-bold ${scoreColor}`}>{scoreValue}%</p>
             <p className="text-slate-500 text-sm mt-1">Điểm số của bạn</p>
           </div>
           <div className="flex items-center justify-center gap-6 text-sm">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-slate-600">{correct} đúng</span>
+              <span className="text-slate-600">{correctCount} đúng</span>
             </div>
             <div className="flex items-center gap-1.5">
               <XCircle className="h-4 w-4 text-red-500" />
-              <span className="text-slate-600">{wrong} sai</span>
+              <span className="text-slate-600">{wrongCount} sai</span>
             </div>
             <div className="flex items-center gap-1.5">
               <SkipForward className="h-4 w-4 text-slate-400" />
-              <span className="text-slate-600">{skipped} bỏ qua</span>
+              <span className="text-slate-600">{skippedCount} bỏ qua</span>
             </div>
           </div>
           <p className="text-xs text-slate-400">Thời gian: {timeTaken}</p>
@@ -84,23 +133,23 @@ export default function ResultPage() {
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-4 text-center">
           <CardContent>
-            <p className="text-2xl font-bold text-emerald-600">{correct}</p>
+            <p className="text-2xl font-bold text-emerald-600">{correctCount}</p>
             <p className="text-xs text-slate-500 mt-1">Câu đúng</p>
-            <Progress value={(correct / totalQuestions) * 100} className="mt-2 h-1" />
+            <Progress value={totalQuestions ? (correctCount / totalQuestions) * 100 : 0} className="mt-2 h-1" />
           </CardContent>
         </Card>
         <Card className="p-4 text-center">
           <CardContent>
-            <p className="text-2xl font-bold text-red-500">{wrong}</p>
+            <p className="text-2xl font-bold text-red-500">{wrongCount}</p>
             <p className="text-xs text-slate-500 mt-1">Câu sai</p>
-            <Progress value={(wrong / totalQuestions) * 100} className="mt-2 h-1 [&>div>div]:bg-red-400" />
+            <Progress value={totalQuestions ? (wrongCount / totalQuestions) * 100 : 0} className="mt-2 h-1 [&>div>div]:bg-red-400" />
           </CardContent>
         </Card>
         <Card className="p-4 text-center">
           <CardContent>
-            <p className="text-2xl font-bold text-slate-400">{skipped}</p>
+            <p className="text-2xl font-bold text-slate-400">{skippedCount}</p>
             <p className="text-xs text-slate-500 mt-1">Bỏ qua</p>
-            <Progress value={(skipped / totalQuestions) * 100} className="mt-2 h-1 [&>div>div]:bg-slate-300" />
+            <Progress value={totalQuestions ? (skippedCount / totalQuestions) * 100 : 0} className="mt-2 h-1 [&>div>div]:bg-slate-300" />
           </CardContent>
         </Card>
       </div>
@@ -108,11 +157,11 @@ export default function ResultPage() {
       <div>
         <h2 className="text-base font-semibold text-slate-900 mb-3">Chi tiết từng câu</h2>
         <div className="space-y-2">
-          {questions.map((q, i) => (
-            <Card key={q.id} className="p-4">
+          {results.map((q, i) => (
+            <Card key={q.questionId} className="p-4">
               <CardContent>
                 <button
-                  onClick={() => setExpandedQ(expandedQ === q.id ? null : q.id)}
+                  onClick={() => setExpandedQ(expandedQ === q.questionId ? null : q.questionId)}
                   className="w-full flex items-center gap-3 text-left cursor-pointer"
                 >
                   <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${q.isCorrect
@@ -131,13 +180,13 @@ export default function ResultPage() {
                   ) : (
                     <XCircle className="h-4 w-4 text-red-500 shrink-0" />
                   )}
-                  {expandedQ === q.id ? (
+                  {expandedQ === q.questionId ? (
                     <ChevronUp className="h-4 w-4 text-slate-400" />
                   ) : (
                     <ChevronDown className="h-4 w-4 text-slate-400" />
                   )}
                 </button>
-                {expandedQ === q.id && (
+                {expandedQ === q.questionId && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -148,11 +197,32 @@ export default function ResultPage() {
                         Bạn chọn: {q.selectedAnswer} {q.isCorrect ? '✓' : `✗ (Đáp án đúng: ${q.correctAnswer})`}
                       </p>
                     )}
+                    <div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={createBookmark.isPending || deleteBookmark.isPending}
+                        onClick={() => toggleBookmark(q.questionId)}
+                      >
+                        {bookmarks.some((bookmark) => bookmark.questionId === q.questionId)
+                          ? 'Bỏ bookmark'
+                          : 'Bookmark câu hỏi'}
+                      </Button>
+                    </div>
                     {q.isSkipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
-                    {q.sourcePage && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                        <FileText className="h-3 w-3" />
-                        <span>Trang {q.sourcePage}</span>
+                    {(q.sourcePage || q.sourceText) && (
+                      <div className="space-y-1 text-xs text-slate-400">
+                        {q.sourcePage && (
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="h-3 w-3" />
+                            <span>Trang {q.sourcePage}</span>
+                          </div>
+                        )}
+                        {q.sourceText && (
+                          <p className="text-slate-500 italic leading-relaxed vn-text">
+                            &ldquo;{q.sourceText}&rdquo;
+                          </p>
+                        )}
                       </div>
                     )}
                   </motion.div>

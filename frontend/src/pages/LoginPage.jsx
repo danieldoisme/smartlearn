@@ -4,17 +4,25 @@ import { motion } from 'framer-motion'
 import { GraduationCap, Mail, Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useLogin, useRegister } from '@/api/auth'
+import {
+  useConfirmPasswordReset,
+  useLogin,
+  useRegister,
+  useRequestPasswordReset,
+} from '@/api/auth'
 import { useAuth } from '@/auth/AuthContext'
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true)
+  const [isResetMode, setIsResetMode] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [resetToken, setResetToken] = useState('')
   const [formError, setFormError] = useState('')
+  const [resetMessage, setResetMessage] = useState('')
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -22,6 +30,8 @@ export default function LoginPage() {
 
   const loginMutation = useLogin()
   const registerMutation = useRegister()
+  const requestResetMutation = useRequestPasswordReset()
+  const confirmResetMutation = useConfirmPasswordReset()
 
   const redirectTo = location.state?.from?.pathname || '/'
 
@@ -31,14 +41,60 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, navigate, redirectTo])
 
-  const isPending = loginMutation.isPending || registerMutation.isPending
+  const isPending =
+    loginMutation.isPending ||
+    registerMutation.isPending ||
+    requestResetMutation.isPending ||
+    confirmResetMutation.isPending
   const serverError =
     loginMutation.error?.response?.data?.detail ||
-    registerMutation.error?.response?.data?.detail
+    registerMutation.error?.response?.data?.detail ||
+    requestResetMutation.error?.response?.data?.detail ||
+    confirmResetMutation.error?.response?.data?.detail
 
   const handleSubmit = (e) => {
     e.preventDefault()
     setFormError('')
+    setResetMessage('')
+    if (isResetMode) {
+      if (!email) {
+        setFormError('Vui lòng nhập email đã đăng ký.')
+        return
+      }
+      if (!resetToken) {
+        requestResetMutation.mutate(
+          { email },
+          {
+            onSuccess: (data) => {
+              setResetToken(data.resetToken)
+              setResetMessage('Đã tạo mã đặt lại mật khẩu. Hãy dùng mã bên dưới để đặt lại mật khẩu.')
+            },
+          }
+        )
+        return
+      }
+      if (!password || !confirmPassword) {
+        setFormError('Vui lòng nhập mật khẩu mới và xác nhận mật khẩu.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setFormError('Mật khẩu xác nhận không khớp.')
+        return
+      }
+      confirmResetMutation.mutate(
+        { token: resetToken, newPassword: password },
+        {
+          onSuccess: () => {
+            setResetMessage('Đặt lại mật khẩu thành công. Hãy đăng nhập lại.')
+            setIsResetMode(false)
+            setPassword('')
+            setConfirmPassword('')
+            setResetToken('')
+          },
+        }
+      )
+      return
+    }
     if (!email || !password) {
       setFormError('Vui lòng nhập email và mật khẩu.')
       return
@@ -89,18 +145,22 @@ export default function LoginPage() {
           <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6">
             <button
               type="button"
-              onClick={() => { setIsLogin(true); setFormError('') }}
+              onClick={() => {
+                setIsLogin(true); setIsResetMode(false); setFormError(''); setResetMessage('')
+              }}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${
-                isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
+                isLogin && !isResetMode ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
               }`}
             >
               Đăng nhập
             </button>
             <button
               type="button"
-              onClick={() => { setIsLogin(false); setFormError('') }}
+              onClick={() => {
+                setIsLogin(false); setIsResetMode(false); setFormError(''); setResetMessage('')
+              }}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${
-                !isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
+                !isLogin && !isResetMode ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
               }`}
             >
               Đăng ký
@@ -108,7 +168,7 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {!isLogin && !isResetMode && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -148,6 +208,7 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {!isResetMode && (
             <div>
               <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu</label>
               <div className="relative">
@@ -172,8 +233,46 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            )}
 
-            {!isLogin && (
+            {isResetMode && resetToken && (
+              <>
+                <div>
+                  <label htmlFor="resetToken" className="block text-xs font-medium text-slate-600 mb-1.5">Mã đặt lại mật khẩu</label>
+                  <Input
+                    id="resetToken"
+                    name="resetToken"
+                    value={resetToken}
+                    onChange={(e) => setResetToken(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu mới</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      className="pl-10 pr-10"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {(!isLogin || isResetMode) && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -190,7 +289,7 @@ export default function LoginPage() {
                     className="pl-10"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
+                    autoComplete={isResetMode ? 'new-password' : 'new-password'}
                   />
                 </div>
               </motion.div>
@@ -202,16 +301,34 @@ export default function LoginPage() {
               </div>
             )}
 
-            {isLogin && (
+            {resetMessage && (
+              <div className="text-xs text-primary-700 bg-primary-50 border border-primary-100 rounded-lg px-3 py-2 whitespace-pre-wrap break-all">
+                {resetMessage}
+                {resetToken && isResetMode ? `\n\nMã: ${resetToken}` : ''}
+              </div>
+            )}
+
+            {isLogin && !isResetMode && (
               <div className="flex justify-end">
-                <button type="button" className="text-xs text-primary-600 hover:text-primary-700 transition-colors cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetMode(true)
+                    setFormError('')
+                    setResetMessage('')
+                    setPassword('')
+                    setConfirmPassword('')
+                    setResetToken('')
+                  }}
+                  className="text-xs text-primary-600 hover:text-primary-700 transition-colors cursor-pointer"
+                >
                   Quên mật khẩu?
                 </button>
               </div>
             )}
 
             <Button type="submit" className="w-full" size="lg" disabled={isPending}>
-              {isPending ? 'Đang xử lý...' : isLogin ? 'Đăng nhập' : 'Tạo tài khoản'}
+              {isPending ? 'Đang xử lý...' : isResetMode ? (resetToken ? 'Đặt lại mật khẩu' : 'Tạo mã đặt lại') : isLogin ? 'Đăng nhập' : 'Tạo tài khoản'}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </form>

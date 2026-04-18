@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --config frontend/vite.config.js frontend",
     "build": "vite build --config frontend/vite.config.js frontend",
-    "lint": "eslint frontend",
+    "lint": "eslint --config frontend/eslint.config.js frontend/src",
     "preview": "vite preview --config frontend/vite.config.js frontend"
   },
   "dependencies": {
@@ -37,6 +37,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",

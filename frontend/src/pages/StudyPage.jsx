@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft,
@@ -16,22 +16,204 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
-import { mockStudyQuestions } from '@/mocks'
-import { QuestionType, QuestionTypeLabel } from '@/models'
+import { QuestionType, QuestionTypeLabel, SessionType } from '@/models'
+import {
+  useBookmarks,
+  useCreateBookmark,
+  useCreateNote,
+  useDeleteBookmark,
+} from '@/api/bookmarks'
+import {
+  useAvailableStudyChapters,
+  useStartStudySession,
+  useSubmitStudyAnswer,
+  useCompleteStudySession,
+} from '@/api/study'
+
+function toMultiWire(labels) {
+  return [...labels].sort().join(',')
+}
 
 export default function StudyPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const chapterIdRaw = searchParams.get('chapterId')
+  const chapterId = chapterIdRaw ? Number(chapterIdRaw) : null
+  const mode = searchParams.get('mode')
+  const sessionType =
+    mode === SessionType.REVIEW ? SessionType.REVIEW : SessionType.LEARN
+  const reviewQuestionIds = useMemo(() => {
+    const raw = searchParams.get('questionIds')
+    if (!raw) return []
+    return [...new Set(raw.split(',').map((value) => Number(value)).filter(Number.isInteger))]
+  }, [searchParams])
+
+  const [sessionId, setSessionId] = useState(null)
+  const [questions, setQuestions] = useState([])
   const [currentQ, setCurrentQ] = useState(0)
   const [selected, setSelected] = useState({})
   const [fillAnswer, setFillAnswer] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [serverResult, setServerResult] = useState(null)
   const [showSource, setShowSource] = useState(false)
-  const [bookmarked, setBookmarked] = useState({})
+  const [noteContent, setNoteContent] = useState('')
+  const [noteMessage, setNoteMessage] = useState('')
 
-  const question = mockStudyQuestions[currentQ]
-  const totalQ = mockStudyQuestions.length
-  const progressPct = ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100
+  const { data: availableChapters = [], isLoading: availableLoading } =
+    useAvailableStudyChapters()
+  const { data: bookmarks = [] } = useBookmarks()
+  const createBookmark = useCreateBookmark()
+  const deleteBookmark = useDeleteBookmark()
+  const createNote = useCreateNote()
+  const startMut = useStartStudySession()
+  const submitMut = useSubmitStudyAnswer(sessionId)
+  const completeMut = useCompleteStudySession()
+
+  const startStatus = startMut.status
+
+  useEffect(() => {
+    if (chapterId == null) return
+    if (startStatus !== 'idle') return
+    startMut.mutate(
+      {
+        chapterId,
+        sessionType,
+        questionIds:
+          sessionType === SessionType.REVIEW ? reviewQuestionIds : undefined,
+      },
+      {
+        onSuccess: (data) => {
+          setSessionId(data.sessionId)
+          setQuestions(data.questions || [])
+        },
+      },
+    )
+  }, [chapterId, reviewQuestionIds, sessionType, startStatus, startMut])
+
+  const question = questions[currentQ]
+  const totalQ = questions.length
+  const progressPct = totalQ ? ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100 : 0
+  const currentBookmark = question
+    ? bookmarks.find((bookmark) => bookmark.questionId === question.id)
+    : null
+
+  const correctLabelSet = useMemo(() => {
+    if (!serverResult?.correctLabel) return new Set()
+    return new Set(serverResult.correctLabel.split(',').map((s) => s.trim()))
+  }, [serverResult])
+
+  if (chapterId == null) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-4xl mx-auto space-y-6"
+      >
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Chọn chương để học</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Chọn một chương đã có câu hỏi để bắt đầu hoặc tiếp tục phiên học.
+          </p>
+        </div>
+
+        {availableLoading ? (
+          <div className="py-16 text-center text-slate-500">
+            Đang tải danh sách chương...
+          </div>
+        ) : availableChapters.length === 0 ? (
+          <Card className="p-8">
+            <CardContent className="text-center space-y-4">
+              <BookOpen className="h-10 w-10 text-slate-300 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-slate-800 font-medium">
+                  Chưa có chương nào sẵn sàng để học
+                </p>
+                <p className="text-sm text-slate-500">
+                  Hãy tải tài liệu lên và tạo câu hỏi trước khi bắt đầu học tập.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <Link to="/upload">
+                  <Button>Tải tài liệu</Button>
+                </Link>
+                <Link to="/library">
+                  <Button variant="outline">Về thư viện</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {availableChapters.map((chapter) => (
+              <Card key={chapter.chapterId} className="p-4">
+                <CardContent className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+                    <BookOpen className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        {chapter.chapterTitle}
+                      </p>
+                      <Badge variant="secondary">{chapter.documentTitle}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>{chapter.questionCount} câu hỏi</span>
+                      <span>
+                        {chapter.answeredCount}/{chapter.questionCount} đã làm
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Progress value={chapter.progress} className="flex-1 h-1.5" />
+                      <span className="text-xs text-slate-500">
+                        {chapter.progress}%
+                      </span>
+                    </div>
+                  </div>
+                  <Button onClick={() => navigate(`/study?chapterId=${chapter.chapterId}`)}>
+                    {chapter.answeredCount > 0 ? 'Tiếp tục học' : 'Bắt đầu học'}
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    )
+  }
+
+  if (startMut.isPending || (!sessionId && !startMut.isError)) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center text-slate-500">
+        Đang tải câu hỏi...
+      </div>
+    )
+  }
+
+  if (startMut.isError) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center space-y-3">
+        <p className="text-slate-600">Không thể bắt đầu phiên học.</p>
+        <Button variant="outline" onClick={() => navigate('/library')}>
+          Về thư viện
+        </Button>
+      </div>
+    )
+  }
+
+  if (!question) {
+    return (
+      <div className="max-w-3xl mx-auto py-16 text-center space-y-3">
+        <p className="text-slate-600">Chương này chưa có câu hỏi.</p>
+        <Button variant="outline" onClick={() => navigate('/library')}>
+          Về thư viện
+        </Button>
+      </div>
+    )
+  }
 
   const handleSelect = (label) => {
     if (submitted) return
@@ -50,41 +232,90 @@ export default function StudyPage() {
     }
   }
 
-  const handleSubmit = () => setSubmitted(true)
-
-  const isCorrect = (option) => {
-    if (!submitted) return null
-    return option.isCorrect
-  }
-
-  const userIsCorrect = () => {
-    if (question.questionType === QuestionType.FILL) return fillAnswer.trim().toLowerCase() === question.correctAnswer.toLowerCase()
+  const buildSelectedAnswer = () => {
+    if (question.questionType === QuestionType.FILL) return fillAnswer.trim() || null
     if (question.questionType === QuestionType.MULTI) {
-      const sel = selected[question.id] || []
-      const correct = question.options.filter((o) => o.isCorrect).map((o) => o.label)
-      return sel.length === correct.length && sel.every((s) => correct.includes(s))
+      const labels = selected[question.id] || []
+      return labels.length ? toMultiWire(labels) : null
     }
-    const correct = question.options.find((o) => o.isCorrect)
-    return selected[question.id] === correct?.label
+    return selected[question.id] || null
   }
 
-  const goNext = () => {
+  const handleSubmit = async () => {
+    const selectedAnswer = buildSelectedAnswer()
+    if (!selectedAnswer) return
+    try {
+      const res = await submitMut.mutateAsync({
+        questionId: question.id,
+        selectedAnswer,
+        isSkipped: false,
+      })
+      setServerResult(res)
+      setSubmitted(true)
+    } catch {
+      // Leave state unchanged; user can retry
+    }
+  }
+
+  const userIsCorrect = () => serverResult?.isCorrect === true
+
+  const optionIsCorrect = (opt) => {
+    if (!submitted || !serverResult) return null
+    return correctLabelSet.has(opt.label)
+  }
+
+  const resetForNext = () => {
+    setSubmitted(false)
+    setShowSource(false)
+    setFillAnswer('')
+    setServerResult(null)
+    setNoteContent('')
+    setNoteMessage('')
+  }
+
+  const goNext = async () => {
     if (currentQ < totalQ - 1) {
       setCurrentQ(currentQ + 1)
-      setSubmitted(false)
-      setShowSource(false)
-      setFillAnswer('')
+      resetForNext()
     } else {
-      navigate('/result')
+      if (sessionId) {
+        try {
+          await completeMut.mutateAsync(sessionId)
+        } catch {
+          // ignore completion error — still navigate
+        }
+      }
+      navigate(sessionType === SessionType.REVIEW ? '/review' : '/progress')
     }
   }
 
   const goPrev = () => {
     if (currentQ > 0) {
       setCurrentQ(currentQ - 1)
-      setSubmitted(false)
-      setShowSource(false)
-      setFillAnswer('')
+      resetForNext()
+    }
+  }
+
+  const toggleBookmark = async () => {
+    if (!question) return
+    if (currentBookmark) {
+      await deleteBookmark.mutateAsync(currentBookmark.id)
+      return
+    }
+    await createBookmark.mutateAsync({ questionId: question.id })
+  }
+
+  const saveNote = async () => {
+    if (!question || !noteContent.trim()) return
+    try {
+      await createNote.mutateAsync({
+        questionId: question.id,
+        content: noteContent.trim(),
+      })
+      setNoteContent('')
+      setNoteMessage('Đã lưu ghi chú.')
+    } catch {
+      setNoteMessage('Không thể lưu ghi chú.')
     }
   }
 
@@ -98,10 +329,13 @@ export default function StudyPage() {
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
             <BookOpen className="h-4 w-4" />
-            <span>Giáo trình CSDL — Chương 3</span>
+            <span>Chương {question.chapterId}</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-slate-800">Câu {currentQ + 1}/{totalQ}</span>
+            {sessionType === SessionType.REVIEW && (
+              <Badge variant="info">Ôn tập câu sai</Badge>
+            )}
             <Badge variant={question.questionType === QuestionType.MCQ ? 'default' : question.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
               {QuestionTypeLabel[question.questionType]}
             </Badge>
@@ -110,9 +344,10 @@ export default function StudyPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setBookmarked((p) => ({ ...p, [question.id]: !p[question.id] }))}
+          onClick={toggleBookmark}
+          disabled={createBookmark.isPending || deleteBookmark.isPending}
         >
-          {bookmarked[question.id] ? (
+          {currentBookmark ? (
             <Bookmark className="h-5 w-5 text-primary-500 fill-primary-500" />
           ) : (
             <BookmarkPlus className="h-5 w-5" />
@@ -132,7 +367,7 @@ export default function StudyPage() {
                 const isSelected = question.questionType === QuestionType.MULTI
                   ? (selected[question.id] || []).includes(opt.label)
                   : selected[question.id] === opt.label
-                const correct = isCorrect(opt)
+                const correct = optionIsCorrect(opt)
 
                 return (
                   <button
@@ -183,7 +418,7 @@ export default function StudyPage() {
               />
               {submitted && (
                 <p className={`text-sm ${userIsCorrect() ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {userIsCorrect() ? '✓ Chính xác!' : `✗ Đáp án đúng: ${question.correctAnswer}`}
+                  {userIsCorrect() ? '✓ Chính xác!' : `✗ Đáp án đúng: ${serverResult?.correctAnswer ?? ''}`}
                 </p>
               )}
             </div>
@@ -210,7 +445,7 @@ export default function StudyPage() {
         </CardContent>
       </Card>
 
-      {submitted && (
+      {submitted && (question.sourcePage || question.sourceText) && (
         <AnimatePresence>
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
             <button
@@ -223,13 +458,37 @@ export default function StudyPage() {
             {showSource && (
               <Card className="p-4">
                 <CardContent>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="h-4 w-4 text-slate-400" />
-                    <span className="text-xs text-slate-500">Trang {question.sourcePage}</span>
+                  {question.sourcePage && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-slate-400" />
+                      <span className="text-xs text-slate-500">Trang {question.sourcePage}</span>
+                    </div>
+                  )}
+                  {question.sourceText && (
+                    <p className="text-sm text-slate-600 leading-relaxed vn-text italic">
+                      &ldquo;{question.sourceText}&rdquo;
+                    </p>
+                  )}
+                  <div className="mt-3 space-y-2">
+                    <Input
+                      value={noteContent}
+                      onChange={(e) => setNoteContent(e.target.value)}
+                      placeholder="Ghi chú nhanh cho câu hỏi này..."
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={saveNote}
+                        disabled={!noteContent.trim() || createNote.isPending}
+                      >
+                        {createNote.isPending ? 'Đang lưu...' : 'Lưu ghi chú'}
+                      </Button>
+                      {noteMessage && (
+                        <span className="text-xs text-slate-500">{noteMessage}</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-600 leading-relaxed vn-text italic">
-                    &ldquo;{question.sourceText}&rdquo;
-                  </p>
                 </CardContent>
               </Card>
             )}
@@ -249,12 +508,15 @@ export default function StudyPage() {
                 <SkipForward className="h-4 w-4" />
                 Bỏ qua
               </Button>
-              <Button onClick={handleSubmit} disabled={!selected[question.id] && !fillAnswer}>
-                Xác nhận
+              <Button
+                onClick={handleSubmit}
+                disabled={submitMut.isPending || (!selected[question.id] && !fillAnswer)}
+              >
+                {submitMut.isPending ? 'Đang gửi...' : 'Xác nhận'}
               </Button>
             </>
           ) : (
-            <Button onClick={goNext}>
+            <Button onClick={goNext} disabled={completeMut.isPending}>
               {currentQ < totalQ - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
               <ChevronRight className="h-4 w-4" />
             </Button>

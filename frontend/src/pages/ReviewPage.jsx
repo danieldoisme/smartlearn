@@ -39,6 +39,15 @@ const item = {
   show: { opacity: 1, y: 0 },
 }
 
+function createReviewHref(chapter) {
+  const params = new URLSearchParams({
+    chapterId: String(chapter.chapterId),
+    mode: 'review',
+    questionIds: chapter.questions.map((question) => question.id).join(','),
+  })
+  return `/study?${params.toString()}`
+}
+
 export default function ReviewPage() {
   const { data: docs = [], isLoading } = useWrongQuestions()
   const [typeFilter, setTypeFilter] = useState('all')
@@ -142,12 +151,30 @@ export default function ReviewPage() {
                   {doc.chapters.reduce((s, ch) => s + ch.questions.length, 0)} câu sai · {doc.chapters.length} chương
                 </p>
               </div>
-              <Link to="/study" onClick={(e) => e.stopPropagation()}>
-                <Button size="sm">
-                  <Play className="h-3.5 w-3.5" />
-                  Ôn tập
+              {doc.chapters.length === 1 ? (
+                <Link
+                  to={createReviewHref(doc.chapters[0])}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button size="sm">
+                    <Play className="h-3.5 w-3.5" />
+                    Ôn tập
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setExpandedDoc(
+                      expandedDoc === doc.documentTitle ? null : doc.documentTitle
+                    )
+                  }}
+                >
+                  Chọn chương
                 </Button>
-              </Link>
+              )}
               {expandedDoc === doc.documentTitle ? (
                 <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
               ) : (
@@ -166,7 +193,17 @@ export default function ReviewPage() {
                     <div className="flex items-center gap-2 px-5 py-2.5 bg-slate-50">
                       <FileText className="h-3.5 w-3.5 text-slate-400" />
                       <span className="text-xs font-medium text-slate-600">{ch.title}</span>
-                      <Badge variant="secondary" className="ml-auto">{ch.questions.length} câu</Badge>
+                      <Link
+                        to={createReviewHref(ch)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="ml-auto"
+                      >
+                        <Button size="sm" variant="outline">
+                          <Play className="h-3.5 w-3.5" />
+                          Ôn tập chương
+                        </Button>
+                      </Link>
+                      <Badge variant="secondary">{ch.questions.length} câu</Badge>
                     </div>
                     <div className="divide-y divide-slate-100">
                       {ch.questions.map((q) => (

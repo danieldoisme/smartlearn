@@ -26,7 +26,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { useTopics, useDocuments } from '@/api/library'
+import {
+  useDeleteDocument,
+  useDocuments,
+  useRenameDocument,
+  useTopics,
+} from '@/api/library'
 
 function formatFileSize(bytes) {
   if (!bytes) return '—'
@@ -54,10 +59,14 @@ export default function LibraryPage() {
   const [activeTopicId, setActiveTopicId] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const [deleteDoc, setDeleteDoc] = useState(null)
+  const [renameDoc, setRenameDoc] = useState(null)
+  const [renameTitle, setRenameTitle] = useState('')
   const [menuOpen, setMenuOpen] = useState(null)
 
   const { data: topics = [] } = useTopics()
   const { data: documents = [], isLoading } = useDocuments(activeTopicId)
+  const renameDocument = useRenameDocument()
+  const deleteDocument = useDeleteDocument()
 
   const filtered = useMemo(
     () => documents.filter((doc) => doc.title.toLowerCase().includes(search.toLowerCase())),
@@ -155,7 +164,14 @@ export default function LibraryPage() {
                     </button>
                     {menuOpen === doc.id && (
                       <div className="absolute right-0 top-8 z-10 w-36 bg-white rounded-xl py-1 shadow-lg border border-slate-200">
-                        <button className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">
+                        <button
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          onClick={() => {
+                            setRenameDoc(doc)
+                            setRenameTitle(doc.title)
+                            setMenuOpen(null)
+                          }}
+                        >
                           <Pencil className="h-3 w-3" /> Đổi tên
                         </button>
                         <button
@@ -241,7 +257,49 @@ export default function LibraryPage() {
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setDeleteDoc(null)}>Hủy</Button>
-            <Button variant="danger" onClick={() => setDeleteDoc(null)}>Xóa</Button>
+            <Button
+              variant="danger"
+              disabled={deleteDocument.isPending}
+              onClick={async () => {
+                if (!deleteDoc) return
+                await deleteDocument.mutateAsync(deleteDoc.id)
+                setDeleteDoc(null)
+              }}
+            >
+              {deleteDocument.isPending ? 'Đang xóa...' : 'Xóa'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameDoc} onOpenChange={() => setRenameDoc(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Đổi tên tài liệu</DialogTitle>
+            <DialogDescription>
+              Cập nhật tên hiển thị của tài liệu trong thư viện.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameTitle}
+            onChange={(e) => setRenameTitle(e.target.value)}
+            placeholder="Tên tài liệu"
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setRenameDoc(null)}>Hủy</Button>
+            <Button
+              disabled={!renameTitle.trim() || renameDocument.isPending}
+              onClick={async () => {
+                if (!renameDoc) return
+                await renameDocument.mutateAsync({
+                  id: renameDoc.id,
+                  title: renameTitle.trim(),
+                })
+                setRenameDoc(null)
+              }}
+            >
+              {renameDocument.isPending ? 'Đang lưu...' : 'Lưu'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

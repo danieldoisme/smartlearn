@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -15,46 +15,94 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import {
+  useCreateTopic,
+  useTopics,
+  useUploadDocument,
+} from '@/api/library'
 
-const topics = ['CSDL', 'OOP', 'Network', 'DSA', 'OS', 'AI']
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('Không thể đọc file'))
+    reader.readAsDataURL(file)
+  })
+}
 
 export default function UploadPage() {
   const [file, setFile] = useState(null)
   const [dragOver, setDragOver] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [selectedTopic, setSelectedTopic] = useState('')
   const [newTopic, setNewTopic] = useState('')
+  const [error, setError] = useState('')
   const fileRef = useRef(null)
   const navigate = useNavigate()
+
+  const { data: topics = [] } = useTopics()
+  const createTopic = useCreateTopic()
+  const uploadDocument = useUploadDocument()
+  const uploading = uploadDocument.isPending
 
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
     const dropped = e.dataTransfer.files[0]
     if (dropped && (dropped.type === 'application/pdf' || dropped.name.endsWith('.docx'))) {
+      setError('')
       setFile(dropped)
+      return
     }
+    setError('Chỉ hỗ trợ file PDF hoặc DOCX.')
   }
 
   const handleFileSelect = (e) => {
     const selected = e.target.files[0]
-    if (selected) setFile(selected)
+    if (!selected) return
+    if (selected.type === 'application/pdf' || selected.name.endsWith('.docx')) {
+      setError('')
+      setFile(selected)
+      return
+    }
+    setError('Chỉ hỗ trợ file PDF hoặc DOCX.')
   }
 
-  const handleUpload = () => {
-    setUploading(true)
-    setUploadProgress(0)
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setTimeout(() => navigate('/library'), 800)
-          return 100
-        }
-        return prev + Math.random() * 15 + 5
+  const handleCreateTopic = async () => {
+    const name = newTopic.trim()
+    if (!name) return
+    setError('')
+    try {
+      const topic = await createTopic.mutateAsync({ name })
+      setSelectedTopic(String(topic.id))
+      setNewTopic('')
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Không thể tạo chủ đề mới.')
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!file) return
+    setError('')
+    setUploadProgress(10)
+    try {
+      const fileContentBase64 = await fileToBase64(file)
+      const data = await uploadDocument.mutateAsync({
+        fileName: file.name,
+        fileContentBase64,
+        topicId: selectedTopic ? Number(selectedTopic) : null,
+        topicName: newTopic.trim() || null,
+        onUploadProgress: (event) => {
+          if (!event.total) return
+          setUploadProgress(Math.min(Math.round((event.loaded / event.total) * 100), 100))
+        },
       })
-    }, 300)
+      setUploadProgress(100)
+      navigate(`/document/${data.id}`)
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Tải lên thất bại.')
+      setUploadProgress(0)
+    }
   }
 
   const formatSize = (bytes) => {
@@ -123,6 +171,7 @@ export default function UploadPage() {
               </div>
               {!uploading && (
                 <button
+                  type="button"
                   onClick={() => setFile(null)}
                   className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
@@ -135,7 +184,7 @@ export default function UploadPage() {
               <div className="space-y-2">
                 <Progress value={Math.min(uploadProgress, 100)} className="h-2" />
                 <div className="flex justify-between text-xs text-slate-500">
-                  <span>{uploadProgress >= 100 ? 'Đang phân tích cấu trúc...' : 'Đang tải lên...'}</span>
+                  <span>{uploadProgress >= 100 ? 'Đang hoàn tất...' : 'Đang tải lên và phân tích...'}</span>
                   <span>{Math.min(Math.round(uploadProgress), 100)}%</span>
                 </div>
               </div>
@@ -144,19 +193,22 @@ export default function UploadPage() {
             {!uploading && (
               <>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-2">Chủ đề (tùy chọn)</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-2">
+                    Chủ đề (tùy chọn)
+                  </label>
                   <div className="flex gap-2 flex-wrap mb-2">
-                    {topics.map((t) => (
+                    {topics.map((topic) => (
                       <button
-                        key={t}
-                        onClick={() => setSelectedTopic(selectedTopic === t ? '' : t)}
+                        key={topic.id}
+                        type="button"
+                        onClick={() => setSelectedTopic(selectedTopic === String(topic.id) ? '' : String(topic.id))}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                          selectedTopic === t
+                          selectedTopic === String(topic.id)
                             ? 'bg-primary-50 text-primary-700 border border-primary-200'
                             : 'text-slate-500 border border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        {t}
+                        {topic.name}
                       </button>
                     ))}
                   </div>
@@ -167,20 +219,36 @@ export default function UploadPage() {
                       onChange={(e) => setNewTopic(e.target.value)}
                       className="text-xs"
                     />
-                    <Button variant="outline" size="sm" disabled={!newTopic}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!newTopic.trim() || createTopic.isPending}
+                      onClick={handleCreateTopic}
+                    >
                       <FolderPlus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
 
-                <Button onClick={handleUpload} className="w-full" size="lg">
+                {error && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleUpload}
+                  className="w-full"
+                  size="lg"
+                  disabled={uploading}
+                >
                   <Upload className="h-4 w-4" />
                   Tải lên và phân tích
                 </Button>
               </>
             )}
 
-            {uploadProgress >= 100 && (
+            {uploadProgress >= 100 && !uploading && !error && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}

@@ -3,20 +3,20 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
-  FileText,
-  BookOpen,
-  Sparkles,
   CheckCircle2,
   Circle,
+  PencilLine,
   Loader2,
-  ChevronRight,
-  Settings2,
+  Sparkles,
   Play,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -25,29 +25,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { mockDocuments, mockChapters, getTopicName, formatFileSize } from '@/mocks'
 import { QuestionType, QuestionTypeLabel } from '@/models'
-
-// Build enriched document view from normalized models
-// In production, these computed fields would come from the API response
-const questionCounts = [8, 10, 12, 10, 8, 6, 5, 5]
-const answeredCounts = [8, 10, 8, 0, 0, 0, 0, 0]
-const accuracyValues = [87, 70, 75, 0, 0, 0, 0, 0]
-
-const baseDoc = mockDocuments[0]
-const enrichedDoc = {
-  ...baseDoc,
-  topicName: getTopicName(baseDoc.topicId),
-  totalQuestions: 64,
-  chapters: mockChapters
-    .filter((ch) => ch.documentId === baseDoc.id)
-    .map((ch, i) => ({
-      ...ch,
-      questionCount: questionCounts[i] || 0,
-      answeredCount: answeredCounts[i] || 0,
-      accuracy: accuracyValues[i] || 0,
-    })),
-}
+import {
+  useDocumentDetail,
+  useGenerateQuestions,
+  useUpdateDocumentStructure,
+} from '@/api/document'
 
 const questionTypes = [
   { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
@@ -65,8 +48,15 @@ const item = {
   show: { opacity: 1, y: 0 },
 }
 
+function formatFileSize(bytes) {
+  if (bytes == null) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
 function getChapterStatus(ch) {
-  if (ch.answeredCount >= ch.questionCount && ch.questionCount > 0) return 'completed'
+  if (ch.questionCount > 0 && ch.answeredCount >= ch.questionCount) return 'completed'
   if (ch.answeredCount > 0) return 'in_progress'
   return 'not_started'
 }
@@ -74,21 +64,124 @@ function getChapterStatus(ch) {
 export default function DocumentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const docId = id ? Number(id) : null
+  const { data: doc, isLoading, isError } = useDocumentDetail(docId)
+  const generateQuestions = useGenerateQuestions(docId)
+  const updateStructure = useUpdateDocumentStructure(docId)
+
   const [showGenerate, setShowGenerate] = useState(false)
+  const [showStructureEditor, setShowStructureEditor] = useState(false)
   const [generateChapter, setGenerateChapter] = useState(null)
   const [genConfig, setGenConfig] = useState({ type: 'mixed', count: 10 })
-  const [generating, setGenerating] = useState(false)
+  const [generateMessage, setGenerateMessage] = useState('')
+  const [structureDraft, setStructureDraft] = useState([])
 
-  const doc = enrichedDoc
-  const totalAnswered = doc.chapters.reduce((s, c) => s + c.answeredCount, 0)
-  const overallProgress = Math.round((totalAnswered / doc.totalQuestions) * 100)
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl py-16 text-center text-slate-500">
+        Đang tải tài liệu...
+      </div>
+    )
+  }
 
-  const handleGenerate = () => {
-    setGenerating(true)
-    setTimeout(() => {
-      setGenerating(false)
+  if (isError || !doc) {
+    return (
+      <div className="max-w-4xl py-16 text-center space-y-3">
+        <p className="text-slate-600">Không tìm thấy tài liệu.</p>
+        <Button variant="outline" onClick={() => navigate('/library')}>
+          Về thư viện
+        </Button>
+      </div>
+    )
+  }
+
+  const chapters = doc.chapters || []
+  const totalAnswered = doc.totalAnswered ?? 0
+  const totalQuestions = doc.totalQuestions ?? 0
+  const overallProgress =
+    totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0
+  const canEditStructure = totalQuestions === 0
+
+  const handleGenerate = async () => {
+    if (!generateChapter) return
+    setGenerateMessage('')
+    try {
+      const result = await generateQuestions.mutateAsync({
+        chapterId: generateChapter.id,
+        questionType: genConfig.type,
+        count: genConfig.count,
+      })
+      setGenerateMessage(`Đã tạo ${result.createdCount} câu hỏi.`)
       setShowGenerate(false)
-    }, 2000)
+    } catch (err) {
+      setGenerateMessage(
+        err?.response?.data?.detail || 'Không thể tạo câu hỏi cho chương này.'
+      )
+    }
+  }
+
+  const openStructureEditor = () => {
+    setGenerateMessage('')
+    setStructureDraft(
+      chapters.length
+        ? chapters.map((chapter) => ({
+            title: chapter.title,
+            contentText: chapter.contentText || '',
+            pageStart: chapter.pageStart ?? '',
+            pageEnd: chapter.pageEnd ?? '',
+          }))
+        : [
+            {
+              title: doc.title || 'Phần 1',
+              contentText: '',
+              pageStart: '',
+              pageEnd: '',
+            },
+          ]
+    )
+    setShowStructureEditor(true)
+  }
+
+  const updateDraftItem = (index, patch) => {
+    setStructureDraft((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    )
+  }
+
+  const addDraftItem = () => {
+    setStructureDraft((prev) => [
+      ...prev,
+      {
+        title: `Phần ${prev.length + 1}`,
+        contentText: '',
+        pageStart: '',
+        pageEnd: '',
+      },
+    ])
+  }
+
+  const removeDraftItem = (index) => {
+    setStructureDraft((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  const handleSaveStructure = async () => {
+    try {
+      const chaptersPayload = structureDraft.map((item) => ({
+        title: item.title.trim(),
+        contentText: item.contentText.trim(),
+        pageStart: item.pageStart === '' ? null : Number(item.pageStart),
+        pageEnd: item.pageEnd === '' ? null : Number(item.pageEnd),
+      }))
+      await updateStructure.mutateAsync({ chapters: chaptersPayload })
+      setGenerateMessage('Đã cập nhật cấu trúc chương thành công.')
+      setShowStructureEditor(false)
+    } catch (err) {
+      setGenerateMessage(
+        err?.response?.data?.detail || 'Không thể cập nhật cấu trúc tài liệu.'
+      )
+    }
   }
 
   const statusIcon = (status) => {
@@ -112,9 +205,11 @@ export default function DocumentDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900">{doc.title}</h1>
-            <Badge variant="secondary">{doc.topicName}</Badge>
+            {doc.topicName && <Badge variant="secondary">{doc.topicName}</Badge>}
           </div>
-          <p className="text-sm text-slate-500 mt-0.5">{doc.chapters.length} chương · {doc.totalQuestions} câu hỏi · {formatFileSize(doc.fileSize)}</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {chapters.length} chương · {totalQuestions} câu hỏi · {formatFileSize(doc.fileSize)}
+          </p>
         </div>
       </motion.div>
 
@@ -127,8 +222,10 @@ export default function DocumentDetailPage() {
             </div>
             <Progress value={overallProgress} className="h-2.5" />
             <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
-              <span>{totalAnswered}/{doc.totalQuestions} câu đã làm</span>
-              <span>{doc.chapters.filter((c) => getChapterStatus(c) === 'completed').length}/{doc.chapters.length} chương hoàn thành</span>
+              <span>{totalAnswered}/{totalQuestions} câu đã làm</span>
+              <span>
+                {chapters.filter((c) => getChapterStatus(c) === 'completed').length}/{chapters.length} chương hoàn thành
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -137,10 +234,39 @@ export default function DocumentDetailPage() {
       <motion.div variants={item}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-slate-900">Mục lục</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openStructureEditor}
+            disabled={!canEditStructure}
+            title={
+              canEditStructure
+                ? 'Chỉnh sửa cấu trúc chương'
+                : 'Chỉ có thể chỉnh cấu trúc trước khi tạo câu hỏi'
+            }
+          >
+            <PencilLine className="h-3.5 w-3.5" />
+            Chỉnh cấu trúc
+          </Button>
         </div>
 
+        {generateMessage && (
+          <div className="mb-4 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-700">
+            {generateMessage}
+          </div>
+        )}
+
         <div className="space-y-2">
-          {doc.chapters.map((ch) => {
+          {chapters.length === 0 && (
+            <Card className="p-6">
+              <CardContent>
+                <p className="text-sm text-slate-500 text-center">
+                  Tài liệu chưa có chương nào.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {chapters.map((ch) => {
             const status = getChapterStatus(ch)
             return (
               <Card key={ch.id} className="p-4 group">
@@ -154,7 +280,9 @@ export default function DocumentDetailPage() {
                         {statusLabel(status)}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-slate-500">
-                        <span>Trang {ch.pageStart}–{ch.pageEnd}</span>
+                        {ch.pageStart != null && ch.pageEnd != null && (
+                          <span>Trang {ch.pageStart}–{ch.pageEnd}</span>
+                        )}
                         <span>{ch.questionCount} câu hỏi</span>
                         {ch.answeredCount > 0 && (
                           <>
@@ -165,7 +293,7 @@ export default function DocumentDetailPage() {
                           </>
                         )}
                       </div>
-                      {ch.answeredCount > 0 && (
+                      {ch.answeredCount > 0 && ch.questionCount > 0 && (
                         <Progress value={(ch.answeredCount / ch.questionCount) * 100} className="mt-2 h-1" />
                       )}
                     </div>
@@ -190,7 +318,7 @@ export default function DocumentDetailPage() {
                             <Sparkles className="h-3.5 w-3.5" />
                             Tạo thêm
                           </Button>
-                          <Link to="/study">
+                          <Link to={`/study?chapterId=${ch.id}`}>
                             <Button size="sm">
                               <Play className="h-3.5 w-3.5" />
                               Học
@@ -261,8 +389,8 @@ export default function DocumentDetailPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setShowGenerate(false)}>Hủy</Button>
-            <Button onClick={handleGenerate} disabled={generating}>
-              {generating ? (
+            <Button onClick={handleGenerate} disabled={generateQuestions.isPending}>
+              {generateQuestions.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Đang tạo...
@@ -273,6 +401,108 @@ export default function DocumentDetailPage() {
                   Tạo câu hỏi
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showStructureEditor} onOpenChange={setShowStructureEditor}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa cấu trúc tài liệu</DialogTitle>
+            <DialogDescription>
+              Điều chỉnh tên chương và nội dung đã tách trước khi tạo câu hỏi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
+            {!canEditStructure && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                Tài liệu đã có câu hỏi. Hiện chỉ hỗ trợ chỉnh cấu trúc trước khi tạo câu hỏi.
+              </div>
+            )}
+
+            {structureDraft.map((chapter, index) => (
+              <Card key={`${index}-${chapter.title}`} className="p-4">
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      Chương {index + 1}
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeDraftItem(index)}
+                      disabled={structureDraft.length <= 1 || !canEditStructure}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <Input
+                    value={chapter.title}
+                    onChange={(e) =>
+                      updateDraftItem(index, { title: e.target.value })
+                    }
+                    disabled={!canEditStructure}
+                    placeholder="Tên chương"
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={chapter.pageStart}
+                      onChange={(e) =>
+                        updateDraftItem(index, { pageStart: e.target.value })
+                      }
+                      disabled={!canEditStructure}
+                      placeholder="Trang bắt đầu"
+                    />
+                    <Input
+                      type="number"
+                      min="1"
+                      value={chapter.pageEnd}
+                      onChange={(e) =>
+                        updateDraftItem(index, { pageEnd: e.target.value })
+                      }
+                      disabled={!canEditStructure}
+                      placeholder="Trang kết thúc"
+                    />
+                  </div>
+
+                  <textarea
+                    value={chapter.contentText}
+                    onChange={(e) =>
+                      updateDraftItem(index, { contentText: e.target.value })
+                    }
+                    disabled={!canEditStructure}
+                    rows={6}
+                    className="glass-input w-full rounded-xl px-4 py-3 text-sm text-slate-800"
+                    placeholder="Nội dung chương"
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={addDraftItem}
+              disabled={!canEditStructure}
+            >
+              <Plus className="h-4 w-4" />
+              Thêm chương
+            </Button>
+            <Button variant="ghost" onClick={() => setShowStructureEditor(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveStructure}
+              disabled={!canEditStructure || updateStructure.isPending}
+            >
+              {updateStructure.isPending ? 'Đang lưu...' : 'Lưu cấu trúc'}
             </Button>
           </DialogFooter>
         </DialogContent>

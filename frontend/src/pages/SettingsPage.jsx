@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   User,
@@ -50,35 +50,33 @@ function initialsOf(name, email) {
 export default function SettingsPage() {
   const { data: me, isLoading: meLoading } = useMe()
   const { data: prefs, isLoading: prefsLoading } = usePreferences()
+
+  if (meLoading || prefsLoading) {
+    return <div className="text-sm text-slate-500">Đang tải...</div>
+  }
+
+  return <SettingsContent me={me} prefs={prefs} />
+}
+
+function SettingsContent({ me, prefs }) {
   const updateMe = useUpdateMe()
   const changePassword = useChangePassword()
   const updatePreferences = useUpdatePreferences()
 
-  const [profile, setProfile] = useState({ fullName: '', email: '' })
+  const [profile, setProfile] = useState({ 
+    fullName: me?.fullName || '', 
+    email: me?.email || '' 
+  })
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [showOldPw, setShowOldPw] = useState(false)
   const [showNewPw, setShowNewPw] = useState(false)
   const [preferences, setPreferences] = useState({
-    defaultQuestionCount: 10,
-    preferredQuestionType: QuestionType.MCQ,
-    answerDisplayMode: DisplayMode.IMMEDIATE,
+    defaultQuestionCount: prefs?.defaultQuestionCount || 10,
+    preferredQuestionType: prefs?.preferredQuestionType || QuestionType.MCQ,
+    answerDisplayMode: prefs?.answerDisplayMode || DisplayMode.IMMEDIATE,
   })
   const [saved, setSaved] = useState(null)
   const [pwError, setPwError] = useState('')
-
-  useEffect(() => {
-    if (me) setProfile({ fullName: me.fullName || '', email: me.email || '' })
-  }, [me])
-
-  useEffect(() => {
-    if (prefs) {
-      setPreferences({
-        defaultQuestionCount: prefs.defaultQuestionCount,
-        preferredQuestionType: prefs.preferredQuestionType,
-        answerDisplayMode: prefs.answerDisplayMode,
-      })
-    }
-  }, [prefs])
 
   const flash = (section) => {
     setSaved(section)
@@ -119,10 +117,6 @@ export default function SettingsPage() {
 
   const handlePreferencesSave = () => {
     updatePreferences.mutate(preferences, { onSuccess: () => flash('preferences') })
-  }
-
-  if (meLoading || prefsLoading) {
-    return <div className="text-sm text-slate-500">Đang tải...</div>
   }
 
   return (
