@@ -50,13 +50,18 @@ export function useUploadDocument() {
   });
 }
 
-export function useRenameDocument() {
+export function useUpdateDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, title }) =>
-      (await apiClient.patch(`/documents/${id}`, { title })).data,
+    mutationFn: async ({ id, title, topicId }) => {
+      const payload = {};
+      if (title !== undefined) payload.title = title;
+      if (topicId !== undefined) payload.topicId = topicId;
+      return (await apiClient.patch(`/documents/${id}`, payload)).data;
+    },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['documents'] });
+      qc.invalidateQueries({ queryKey: ['topics'] });
       qc.invalidateQueries({ queryKey: ['document', variables.id] });
       qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
     },

@@ -193,6 +193,21 @@ async def update_document(
     data = payload.model_dump(exclude_unset=True)
     if "title" in data:
         doc.title = data["title"].strip()
+    if "topic_id" in data:
+        topic_id = data["topic_id"]
+        if topic_id is None:
+            doc.topic_id = None
+        else:
+            topic = (
+                await db.execute(
+                    select(Topic)
+                    .where(Topic.id == topic_id)
+                    .where(Topic.user_id == current.id)
+                )
+            ).scalar_one_or_none()
+            if topic is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+            doc.topic_id = topic.id
     await db.commit()
     await db.refresh(doc)
     return DocumentOut.model_validate(doc)
@@ -595,7 +610,7 @@ async def generate_questions(
             content=item["content"],
             correct_answer=item["correct_answer"],
             source_text=item["source_text"],
-            source_page=None,
+            source_page=chapter.page_start,
         )
         db.add(question)
         await db.flush()

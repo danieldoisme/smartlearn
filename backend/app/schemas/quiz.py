@@ -28,7 +28,11 @@ class QuestionOut(CamelModel):
     chapter_id: int
     question_type: QuestionType
     content: str
+    chapter_title: Optional[str] = None
+    document_id: Optional[int] = None
+    document_title: Optional[str] = None
     source_text: Optional[str] = None
+    source_context: Optional[str] = None
     source_page: Optional[int] = None
     options: List[QuestionOptionOut] = []
 
@@ -118,11 +122,16 @@ class ExamResultItem(CamelModel):
     order_index: int
     content: str
     question_type: QuestionType
+    chapter_id: Optional[int] = None
+    chapter_title: Optional[str] = None
+    document_id: Optional[int] = None
+    document_title: Optional[str] = None
     selected_answer: Optional[str] = None
     correct_answer: Optional[str] = None
     is_correct: bool
     is_skipped: bool
     source_text: Optional[str] = None
+    source_context: Optional[str] = None
     source_page: Optional[int] = None
 
 

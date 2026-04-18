@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bookmark,
@@ -31,6 +32,23 @@ import {
   useUpdateNote,
   useDeleteNote,
 } from '@/api/bookmarks'
+
+function buildQuestionHref(item) {
+  if (!item?.questionId || !item?.chapterId) return null
+  const params = new URLSearchParams({
+    chapterId: String(item.chapterId),
+    mode: 'review',
+    questionIds: String(item.questionId),
+  })
+  return `/study?${params.toString()}`
+}
+
+function buildDocumentHref(item) {
+  if (!item?.documentId) return null
+  const params = new URLSearchParams()
+  if (item.chapterId) params.set('focusChapterId', String(item.chapterId))
+  return `/document/${item.documentId}${params.toString() ? `?${params.toString()}` : ''}`
+}
 
 function formatRelativeTime(isoDate) {
   if (!isoDate) return ''
@@ -145,9 +163,19 @@ export default function BookmarksPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <BookOpen className="h-3.5 w-3.5" />
-                    </Button>
+                    {buildQuestionHref(bm) ? (
+                      <Link to={buildQuestionHref(bm)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    ) : buildDocumentHref(bm) ? (
+                      <Link to={buildDocumentHref(bm)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -189,9 +217,13 @@ export default function BookmarksPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
+                    {buildDocumentHref(bm) && (
+                      <Link to={buildDocumentHref(bm)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -260,6 +292,19 @@ export default function BookmarksPage() {
                     </div>
                     {editingNote !== note.id && (
                       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {buildQuestionHref(note) ? (
+                          <Link to={buildQuestionHref(note)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <BookOpen className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        ) : buildDocumentHref(note) ? (
+                          <Link to={buildDocumentHref(note)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        ) : null}
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(note)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>

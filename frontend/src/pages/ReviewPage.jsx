@@ -172,7 +172,7 @@ export default function ReviewPage() {
                     )
                   }}
                 >
-                  Chọn chương
+                  Chọn chương để ôn tập
                 </Button>
               )}
               {expandedDoc === doc.documentTitle ? (
@@ -217,8 +217,8 @@ export default function ReviewPage() {
                               <Badge variant={q.questionType === QuestionType.MCQ ? 'default' : q.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
                                 {QuestionTypeLabel[q.questionType]}
                               </Badge>
-                              <span className="text-red-500">Bạn: {q.selectedAnswer || '—'}</span>
-                              <span className="text-emerald-600">Đáp án: {q.correctAnswer}</span>
+                              <span className="text-red-500">Bạn: {q.selectedAnswerDisplay || q.selectedAnswerValue || '—'}</span>
+                              <span className="text-emerald-600">Đáp án: {q.correctAnswerDisplay || q.correctAnswerValue || '—'}</span>
                               <span className="text-slate-400">Đã thử {q.attemptCount} lần · {formatRelativeTime(q.lastAnsweredAt)}</span>
                             </div>
                           </div>

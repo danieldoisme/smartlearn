@@ -23,3 +23,33 @@ class DocumentProgress(CamelModel):
     answered_count: int
     accuracy: int
     last_studied: Optional[str] = None
+
+
+class QuestionAttemptDetail(CamelModel):
+    question_id: int
+    content: str
+    selected_answer: Optional[str] = None
+    correct_answer: Optional[str] = None
+    is_correct: bool
+    is_skipped: bool
+    attempt_count: int
+    last_answered_at: Optional[str] = None
+
+
+class ChapterProgressDetail(CamelModel):
+    chapter_id: int
+    chapter_title: str
+    accuracy: int
+    answered_count: int
+    question_count: int
+    questions: list[QuestionAttemptDetail] = []
+
+
+class DocumentProgressDetail(CamelModel):
+    document_id: int
+    title: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    answered_count: int
+    accuracy: int
+    chapters: list[ChapterProgressDetail] = []

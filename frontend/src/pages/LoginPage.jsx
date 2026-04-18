@@ -64,7 +64,7 @@ export default function LoginPage() {
           onSuccess: (data) => {
             setResetMessage(
               data?.message ||
-                'Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu.'
+              'Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu.'
             )
           },
         }
@@ -128,9 +128,8 @@ export default function LoginPage() {
                   setIsLogin(true)
                   resetFormState()
                 }}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${
-                  isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
-                }`}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
+                  }`}
               >
                 Đăng nhập
               </button>
@@ -140,9 +139,8 @@ export default function LoginPage() {
                   setIsLogin(false)
                   resetFormState()
                 }}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${
-                  !isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
-                }`}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer ${!isLogin ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-600'
+                  }`}
               >
                 Đăng ký
               </button>

@@ -29,7 +29,7 @@ import {
 import {
   useDeleteDocument,
   useDocuments,
-  useRenameDocument,
+  useUpdateDocument,
   useTopics,
 } from '@/api/library'
 
@@ -59,19 +59,27 @@ export default function LibraryPage() {
   const [activeTopicId, setActiveTopicId] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const [deleteDoc, setDeleteDoc] = useState(null)
-  const [renameDoc, setRenameDoc] = useState(null)
-  const [renameTitle, setRenameTitle] = useState('')
+  const [editDoc, setEditDoc] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editTopicId, setEditTopicId] = useState('')
   const [menuOpen, setMenuOpen] = useState(null)
 
   const { data: topics = [] } = useTopics()
   const { data: documents = [], isLoading } = useDocuments(activeTopicId)
-  const renameDocument = useRenameDocument()
+  const updateDocument = useUpdateDocument()
   const deleteDocument = useDeleteDocument()
 
   const filtered = useMemo(
     () => documents.filter((doc) => doc.title.toLowerCase().includes(search.toLowerCase())),
     [documents, search]
   )
+
+  const openEditDialog = (doc) => {
+    setEditDoc(doc)
+    setEditTitle(doc.title)
+    setEditTopicId(doc.topicId == null ? '' : String(doc.topicId))
+    setMenuOpen(null)
+  }
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
@@ -167,12 +175,10 @@ export default function LibraryPage() {
                         <button
                           className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer"
                           onClick={() => {
-                            setRenameDoc(doc)
-                            setRenameTitle(doc.title)
-                            setMenuOpen(null)
+                            openEditDialog(doc)
                           }}
                         >
-                          <Pencil className="h-3 w-3" /> Đổi tên
+                          <Pencil className="h-3 w-3" /> Chỉnh sửa
                         </button>
                         <button
                           onClick={() => { setDeleteDoc(doc); setMenuOpen(null) }}
@@ -228,6 +234,30 @@ export default function LibraryPage() {
                   <Progress value={doc.progress} className="flex-1 h-1.5" />
                   <span className="text-xs text-slate-500">{doc.progress}%</span>
                 </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setMenuOpen(menuOpen === doc.id ? null : doc.id)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                  {menuOpen === doc.id && (
+                    <div className="absolute right-0 top-8 z-10 w-36 bg-white rounded-xl py-1 shadow-lg border border-slate-200">
+                      <button
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 cursor-pointer"
+                        onClick={() => openEditDialog(doc)}
+                      >
+                        <Pencil className="h-3 w-3" /> Chỉnh sửa
+                      </button>
+                      <button
+                        onClick={() => { setDeleteDoc(doc); setMenuOpen(null) }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" /> Xóa
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <Link to={`/document/${doc.id}`}>
                   <Button variant="ghost" size="sm">
                     <BookOpen className="h-4 w-4" />
@@ -272,33 +302,57 @@ export default function LibraryPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!renameDoc} onOpenChange={() => setRenameDoc(null)}>
+      <Dialog open={!!editDoc} onOpenChange={() => setEditDoc(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Đổi tên tài liệu</DialogTitle>
+            <DialogTitle>Cập nhật tài liệu</DialogTitle>
             <DialogDescription>
-              Cập nhật tên hiển thị của tài liệu trong thư viện.
+              Chỉnh sửa tên hiển thị và chủ đề phân loại của tài liệu trong thư viện.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={renameTitle}
-            onChange={(e) => setRenameTitle(e.target.value)}
-            placeholder="Tên tài liệu"
-          />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Tên tài liệu</label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Tên tài liệu"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="topic-select" className="text-sm font-medium text-slate-700">
+                Chủ đề
+              </label>
+              <select
+                id="topic-select"
+                value={editTopicId}
+                onChange={(e) => setEditTopicId(e.target.value)}
+                className="glass-input h-11 w-full px-4 text-sm text-slate-800"
+              >
+                <option value="">Không phân loại</option>
+                {topics.map((topic) => (
+                  <option key={topic.id} value={String(topic.id)}>
+                    {topic.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setRenameDoc(null)}>Hủy</Button>
+            <Button variant="ghost" onClick={() => setEditDoc(null)}>Hủy</Button>
             <Button
-              disabled={!renameTitle.trim() || renameDocument.isPending}
+              disabled={!editTitle.trim() || updateDocument.isPending}
               onClick={async () => {
-                if (!renameDoc) return
-                await renameDocument.mutateAsync({
-                  id: renameDoc.id,
-                  title: renameTitle.trim(),
+                if (!editDoc) return
+                await updateDocument.mutateAsync({
+                  id: editDoc.id,
+                  title: editTitle.trim(),
+                  topicId: editTopicId === '' ? null : Number(editTopicId),
                 })
-                setRenameDoc(null)
+                setEditDoc(null)
               }}
             >
-              {renameDocument.isPending ? 'Đang lưu...' : 'Lưu'}
+              {updateDocument.isPending ? 'Đang lưu...' : 'Lưu'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -29,6 +29,7 @@ class DocumentUploadIn(CamelModel):
 
 class DocumentUpdateIn(CamelModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    topic_id: Optional[int] = None
 
 
 class LibraryDocumentOut(DocumentOut):

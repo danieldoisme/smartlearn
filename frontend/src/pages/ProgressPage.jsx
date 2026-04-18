@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart,
@@ -19,11 +19,20 @@ import {
   FileText,
   CheckCircle2,
   Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { useWeekly, useAccuracyTrend, useDocumentsProgress } from '@/api/progress'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  useWeekly,
+  useAccuracyTrend,
+  useDocumentsProgress,
+  useDocumentProgressDetail,
+} from '@/api/progress'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -48,10 +57,94 @@ const item = {
   show: { opacity: 1, y: 0 },
 }
 
+function todayString() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function daysAgoString(days) {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
+function DocumentDetailPanel({ documentId, range }) {
+  const { data, isLoading } = useDocumentProgressDetail(documentId, range, true)
+
+  if (isLoading) {
+    return <p className="text-sm text-slate-500">Đang tải chi tiết...</p>
+  }
+
+  if (!data || data.chapters.length === 0) {
+    return (
+      <p className="text-sm text-slate-500">
+        Chưa có câu hỏi nào được làm trong khoảng thời gian đã chọn.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {data.chapters.map((chapter) => (
+        <div key={chapter.chapterId} className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800">{chapter.chapterTitle}</h4>
+              <p className="text-xs text-slate-500">
+                {chapter.answeredCount}/{chapter.questionCount} câu đã làm · {chapter.accuracy}% chính xác
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {chapter.questions.map((question) => (
+              <div key={question.questionId} className="rounded-lg border border-white bg-white px-3 py-2">
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                      question.isSkipped
+                        ? 'bg-slate-100 text-slate-400'
+                        : question.isCorrect
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'bg-red-50 text-red-600'
+                    }`}
+                  >
+                    {question.isSkipped ? '–' : question.isCorrect ? '✓' : '✗'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-700 vn-text">{question.content}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>Đã thử {question.attemptCount} lần</span>
+                      {question.lastAnsweredAt && <span>· {new Date(question.lastAnsweredAt).toLocaleString('vi-VN')}</span>}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      {question.isSkipped ? (
+                        <span className="text-slate-400">Bỏ qua · Đáp án đúng: {question.correctAnswer || '—'}</span>
+                      ) : (
+                        <span className={question.isCorrect ? 'text-emerald-600' : 'text-red-600'}>
+                          Bạn chọn: {question.selectedAnswer || '—'} · Đáp án đúng: {question.correctAnswer || '—'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ProgressPage() {
-  const { data: weeklyData = [], isLoading: wLoading } = useWeekly()
-  const { data: accuracyTrend = [], isLoading: aLoading } = useAccuracyTrend()
-  const { data: documentProgress = [], isLoading: dLoading } = useDocumentsProgress()
+  const [range, setRange] = useState({
+    startDate: daysAgoString(29),
+    endDate: todayString(),
+  })
+  const [expandedDocId, setExpandedDocId] = useState(null)
+
+  const { data: weeklyData = [], isLoading: wLoading } = useWeekly(range)
+  const { data: accuracyTrend = [], isLoading: aLoading } = useAccuracyTrend(range)
+  const { data: documentProgress = [], isLoading: dLoading } = useDocumentsProgress(range)
 
   const overviewStats = useMemo(() => {
     const totalDocs = documentProgress.length
@@ -109,6 +202,60 @@ export default function ProgressPage() {
       <motion.div variants={item}>
         <h1 className="text-2xl font-bold text-slate-900">Tiến độ học tập</h1>
         <p className="text-slate-500 text-sm mt-1">Theo dõi kết quả và xu hướng</p>
+      </motion.div>
+
+      <motion.div variants={item} className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { label: '7 ngày', start: daysAgoString(6), end: todayString() },
+            { label: '30 ngày', start: daysAgoString(29), end: todayString() },
+            { label: '90 ngày', start: daysAgoString(89), end: todayString() },
+            { label: 'Tất cả', start: '', end: '' },
+          ].map((preset) => {
+            const active =
+              (range.startDate || '') === preset.start && (range.endDate || '') === preset.end
+            return (
+              <Button
+                key={preset.label}
+                type="button"
+                variant={active ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() =>
+                  setRange({
+                    startDate: preset.start,
+                    endDate: preset.end,
+                  })
+                }
+              >
+                {preset.label}
+              </Button>
+            )
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="progress-start-date" className="text-xs font-medium text-slate-600">
+              Từ ngày
+            </label>
+            <Input
+              id="progress-start-date"
+              type="date"
+              value={range.startDate}
+              onChange={(e) => setRange((prev) => ({ ...prev, startDate: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="progress-end-date" className="text-xs font-medium text-slate-600">
+              Đến ngày
+            </label>
+            <Input
+              id="progress-end-date"
+              type="date"
+              value={range.endDate}
+              onChange={(e) => setRange((prev) => ({ ...prev, endDate: e.target.value }))}
+            />
+          </div>
+        </div>
       </motion.div>
 
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -190,9 +337,26 @@ export default function ProgressPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-semibold text-slate-800">{doc.title}</h3>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                          <Clock className="h-3 w-3" />
-                          {doc.lastStudied || '—'}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                            <Clock className="h-3 w-3" />
+                            {doc.lastStudied || '—'}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() =>
+                              setExpandedDocId((prev) => (prev === doc.id ? null : doc.id))
+                            }
+                          >
+                            {expandedDocId === doc.id ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
                       </div>
 
@@ -221,6 +385,12 @@ export default function ProgressPage() {
                           </div>
                         </div>
                       </div>
+
+                      {expandedDocId === doc.id && (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <DocumentDetailPanel documentId={doc.id} range={range} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>

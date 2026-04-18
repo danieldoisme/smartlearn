@@ -25,6 +25,7 @@ async def _resolve_bookmark_context(
 ) -> dict:
     ctx: dict = {
         "question_content": None,
+        "chapter_id": None,
         "chapter_title": None,
         "document_id": None,
         "document_title": None,
@@ -46,6 +47,7 @@ async def _resolve_bookmark_context(
             chapter_id = chapter_id or row[1]
 
     if chapter_id is not None:
+        ctx["chapter_id"] = chapter_id
         row = (
             await db.execute(
                 select(Chapter.title, Document.id, Document.title, Document.user_id)
@@ -63,14 +65,15 @@ async def _resolve_bookmark_context(
 
 
 def _bookmark_out(bm: Bookmark, ctx: dict) -> BookmarkOut:
+    extra = {key: value for key, value in ctx.items() if key != "chapter_id"}
     return BookmarkOut(
         id=bm.id,
         user_id=bm.user_id,
         question_id=bm.question_id,
-        chapter_id=bm.chapter_id,
+        chapter_id=ctx.get("chapter_id", bm.chapter_id),
         page_number=bm.page_number,
         created_at=bm.created_at,
-        **ctx,
+        **extra,
     )
 
 
@@ -192,6 +195,9 @@ async def _resolve_note_context(db: AsyncSession, note: Note, user_id: int) -> d
     ctx: dict = {
         "question_content": None,
         "page_number": None,
+        "chapter_id": None,
+        "chapter_title": None,
+        "document_id": None,
         "document_title": None,
     }
 
@@ -225,13 +231,22 @@ async def _resolve_note_context(db: AsyncSession, note: Note, user_id: int) -> d
     if chapter_id is not None:
         row = (
             await db.execute(
-                select(Document.title, Document.user_id)
+                select(
+                    Chapter.id,
+                    Chapter.title,
+                    Document.id,
+                    Document.title,
+                    Document.user_id,
+                )
                 .join(Chapter, Chapter.document_id == Document.id)
                 .where(Chapter.id == chapter_id)
             )
         ).first()
-        if row is not None and row[1] == user_id:
-            ctx["document_title"] = row[0]
+        if row is not None and row[4] == user_id:
+            ctx["chapter_id"] = row[0]
+            ctx["chapter_title"] = row[1]
+            ctx["document_id"] = row[2]
+            ctx["document_title"] = row[3]
     return ctx
 
 

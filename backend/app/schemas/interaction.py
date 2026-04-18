@@ -37,6 +37,9 @@ class NoteOut(CamelModel):
     # Enriched context
     question_content: Optional[str] = None
     page_number: Optional[int] = None
+    chapter_id: Optional[int] = None
+    chapter_title: Optional[str] = None
+    document_id: Optional[int] = None
     document_title: Optional[str] = None
 
 

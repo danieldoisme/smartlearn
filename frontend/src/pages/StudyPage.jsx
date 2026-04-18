@@ -36,6 +36,35 @@ function toMultiWire(labels) {
   return [...labels].sort().join(',')
 }
 
+function getChapterStatus(chapter) {
+  if (!chapter?.questionCount) return 'empty'
+  if (chapter.progress >= 100) return 'completed'
+  if (chapter.answeredCount > 0) return 'in_progress'
+  return 'not_started'
+}
+
+function getChapterStatusMeta(chapter) {
+  const status = getChapterStatus(chapter)
+  if (status === 'completed') return { label: 'Đã hoàn thành', variant: 'success' }
+  if (status === 'in_progress') return { label: 'Đang học', variant: 'info' }
+  if (status === 'empty') return { label: 'Chưa có câu hỏi', variant: 'warning' }
+  return { label: 'Chưa học', variant: 'secondary' }
+}
+
+const statusFilters = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'not_started', label: 'Chưa học' },
+  { value: 'in_progress', label: 'Đang học' },
+  { value: 'completed', label: 'Đã hoàn thành' },
+]
+
+function buildCitationHref(question) {
+  if (!question?.documentId) return null
+  const params = new URLSearchParams()
+  if (question.chapterId) params.set('focusChapterId', String(question.chapterId))
+  return `/document/${question.documentId}${params.toString() ? `?${params.toString()}` : ''}`
+}
+
 export default function StudyPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -58,8 +87,10 @@ export default function StudyPage() {
   const [submitted, setSubmitted] = useState(false)
   const [serverResult, setServerResult] = useState(null)
   const [showSource, setShowSource] = useState(false)
+  const [showSourceContext, setShowSourceContext] = useState(false)
   const [noteContent, setNoteContent] = useState('')
   const [noteMessage, setNoteMessage] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const { data: availableChapters = [], isLoading: availableLoading } =
     useAvailableStudyChapters()
@@ -95,9 +126,18 @@ export default function StudyPage() {
   const question = questions[currentQ]
   const totalQ = questions.length
   const progressPct = totalQ ? ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100 : 0
+  const activeChapter = useMemo(
+    () => availableChapters.find((chapter) => chapter.chapterId === chapterId) || null,
+    [availableChapters, chapterId],
+  )
+  const filteredChapters = useMemo(() => {
+    if (statusFilter === 'all') return availableChapters
+    return availableChapters.filter((chapter) => getChapterStatus(chapter) === statusFilter)
+  }, [availableChapters, statusFilter])
   const currentBookmark = question
     ? bookmarks.find((bookmark) => bookmark.questionId === question.id)
     : null
+  const citationHref = question ? buildCitationHref(question) : null
 
   const correctLabelSet = useMemo(() => {
     if (!serverResult?.correctLabel) return new Set()
@@ -112,9 +152,13 @@ export default function StudyPage() {
         className="max-w-4xl mx-auto space-y-6"
       >
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Chọn chương để học</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {sessionType === SessionType.REVIEW ? 'Chọn chương để ôn tập' : 'Chọn chương để học'}
+          </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Chọn một chương đã có câu hỏi để bắt đầu hoặc tiếp tục phiên học.
+            {sessionType === SessionType.REVIEW
+              ? 'Phiên ôn tập cần đúng chương và danh sách câu sai tương ứng.'
+              : 'Chọn một chương đã có câu hỏi để bắt đầu hoặc tiếp tục phiên học.'}
           </p>
         </div>
 
@@ -122,6 +166,28 @@ export default function StudyPage() {
           <div className="py-16 text-center text-slate-500">
             Đang tải danh sách chương...
           </div>
+        ) : sessionType === SessionType.REVIEW ? (
+          <Card className="p-8">
+            <CardContent className="text-center space-y-4">
+              <Lightbulb className="h-10 w-10 text-amber-400 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-slate-800 font-medium">
+                  Hãy mở một nhóm câu sai từ trang ôn tập
+                </p>
+                <p className="text-sm text-slate-500">
+                  Chọn tài liệu hoặc chương cần ôn tập để hệ thống tạo đúng phiên học.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <Link to="/review">
+                  <Button>Bắt đầu từ trang ôn tập</Button>
+                </Link>
+                <Link to="/study">
+                  <Button variant="outline">Chuyển sang học thường</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         ) : availableChapters.length === 0 ? (
           <Card className="p-8">
             <CardContent className="text-center space-y-4">
@@ -145,8 +211,44 @@ export default function StudyPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {availableChapters.map((chapter) => (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              {statusFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                    statusFilter === filter.value
+                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                      : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {filteredChapters.length === 0 ? (
+              <Card className="p-8">
+                <CardContent className="text-center space-y-3">
+                  <BookOpen className="h-10 w-10 text-slate-300 mx-auto" />
+                  <div className="space-y-1">
+                    <p className="text-slate-800 font-medium">
+                      Không có chương nào trong nhóm &ldquo;{statusFilters.find((filter) => filter.value === statusFilter)?.label}&rdquo;
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Thử đổi bộ lọc để xem thêm chương khả dụng.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => setStatusFilter('all')}>
+                    Xem tất cả chương
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : filteredChapters.map((chapter) => {
+              const statusMeta = getChapterStatusMeta(chapter)
+              return (
               <Card key={chapter.chapterId} className="p-4">
                 <CardContent className="flex items-center gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
@@ -158,6 +260,7 @@ export default function StudyPage() {
                         {chapter.chapterTitle}
                       </p>
                       <Badge variant="secondary">{chapter.documentTitle}</Badge>
+                      <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span>{chapter.questionCount} câu hỏi</span>
@@ -178,7 +281,8 @@ export default function StudyPage() {
                   </Button>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
           </div>
         )}
       </motion.div>
@@ -267,6 +371,7 @@ export default function StudyPage() {
   const resetForNext = () => {
     setSubmitted(false)
     setShowSource(false)
+    setShowSourceContext(false)
     setFillAnswer('')
     setServerResult(null)
     setNoteContent('')
@@ -329,12 +434,21 @@ export default function StudyPage() {
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
             <BookOpen className="h-4 w-4" />
-            <span>Chương {question.chapterId}</span>
+            <span>{activeChapter?.chapterTitle || `Chương ${question.chapterId}`}</span>
+            {activeChapter?.documentTitle && (
+              <>
+                <span>·</span>
+                <span>{activeChapter.documentTitle}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-slate-800">Câu {currentQ + 1}/{totalQ}</span>
             {sessionType === SessionType.REVIEW && (
               <Badge variant="info">Ôn tập câu sai</Badge>
+            )}
+            {question.documentTitle && (
+              <Badge variant="secondary">{question.documentTitle}</Badge>
             )}
             <Badge variant={question.questionType === QuestionType.MCQ ? 'default' : question.questionType === QuestionType.MULTI ? 'info' : 'warning'}>
               {QuestionTypeLabel[question.questionType]}
@@ -469,8 +583,40 @@ export default function StudyPage() {
                       &ldquo;{question.sourceText}&rdquo;
                     </p>
                   )}
+                  {(question.documentTitle || question.chapterTitle) && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      {question.documentTitle && <Badge variant="secondary">{question.documentTitle}</Badge>}
+                      {question.chapterTitle && <span>Chương: {question.chapterTitle}</span>}
+                    </div>
+                  )}
+                  {question.sourceContext && question.sourceContext !== question.sourceText && (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowSourceContext((prev) => !prev)}
+                        className="text-xs font-medium text-primary-600 hover:text-primary-700 cursor-pointer"
+                      >
+                        {showSourceContext ? 'Ẩn ngữ cảnh mở rộng' : 'Xem thêm ngữ cảnh'}
+                      </button>
+                      {showSourceContext && (
+                        <p className="text-sm text-slate-500 leading-relaxed vn-text">
+                          {question.sourceContext}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {citationHref && (
+                    <Link to={citationHref} className="inline-block mt-3">
+                      <Button size="sm" variant="outline">
+                        <FileText className="h-4 w-4" />
+                        Mở trong tài liệu
+                      </Button>
+                    </Link>
+                  )}
                   <div className="mt-3 space-y-2">
                     <Input
+                      id="note-input"
+                      name="note-input"
                       value={noteContent}
                       onChange={(e) => setNoteContent(e.target.value)}
                       placeholder="Ghi chú nhanh cho câu hỏi này..."

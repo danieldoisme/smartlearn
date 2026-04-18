@@ -66,6 +66,28 @@ def _grade(
     return is_correct, correct_label_str, correct_label_str
 
 
+def _build_source_context(
+    content_text: Optional[str], source_text: Optional[str], radius: int = 180
+) -> Optional[str]:
+    if not content_text or not source_text:
+        return None
+    content = " ".join(content_text.split())
+    source = " ".join(source_text.split())
+    lower_content = content.lower()
+    lower_source = source.lower()
+    index = lower_content.find(lower_source)
+    if index == -1:
+        return None
+    start = max(0, index - radius)
+    end = min(len(content), index + len(source) + radius)
+    snippet = content[start:end].strip()
+    if start > 0:
+        snippet = f"…{snippet}"
+    if end < len(content):
+        snippet = f"{snippet}…"
+    return snippet
+
+
 async def _own_chapter(db: AsyncSession, chapter_id: int, user_id: int) -> Chapter:
     row = await db.execute(
         select(Chapter)
@@ -92,12 +114,21 @@ async def _own_session(db: AsyncSession, session_id: int, user_id: int) -> Study
 
 
 def _to_question_out(q: Question) -> QuestionOut:
+    chapter = getattr(q, "chapter", None)
+    document = getattr(chapter, "document", None) if chapter is not None else None
     return QuestionOut(
         id=q.id,
         chapter_id=q.chapter_id,
         question_type=q.question_type,
         content=q.content,
+        chapter_title=chapter.title if chapter is not None else None,
+        document_id=document.id if document is not None else None,
+        document_title=document.title if document is not None else None,
         source_text=q.source_text,
+        source_context=_build_source_context(
+            chapter.content_text if chapter is not None else None,
+            q.source_text,
+        ),
         source_page=q.source_page,
         options=[
             QuestionOptionOut(id=o.id, label=o.label, content=o.content)
@@ -198,7 +229,10 @@ async def start_session(
             (
                 await db.execute(
                     select(Question)
-                    .options(selectinload(Question.options))
+                    .options(
+                        selectinload(Question.options),
+                        selectinload(Question.chapter).selectinload(Chapter.document),
+                    )
                     .where(Question.chapter_id == payload.chapter_id)
                     .where(Question.id.in_(ordered_ids))
                 )
@@ -213,7 +247,10 @@ async def start_session(
             (
                 await db.execute(
                     select(Question)
-                    .options(selectinload(Question.options))
+                    .options(
+                        selectinload(Question.options),
+                        selectinload(Question.chapter).selectinload(Chapter.document),
+                    )
                     .where(Question.chapter_id == payload.chapter_id)
                     .order_by(Question.id)
                     .limit(limit)

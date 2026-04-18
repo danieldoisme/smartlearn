@@ -18,7 +18,7 @@ from backend.app.models.quiz import (
     UserAnswer,
 )
 from backend.app.models.user import User
-from backend.app.routers.study import _grade, _to_question_out
+from backend.app.routers.study import _build_source_context, _grade, _to_question_out
 from backend.app.schemas.quiz import (
     ExamProgressIn,
     ExamResultItem,
@@ -119,7 +119,10 @@ async def start_exam(
         (
             await db.execute(
                 select(Question)
-                .options(selectinload(Question.options))
+                .options(
+                    selectinload(Question.options),
+                    selectinload(Question.chapter).selectinload(Chapter.document),
+                )
                 .where(Question.id.in_(question_ids))
             )
         )
@@ -209,7 +212,10 @@ async def _load_exam_items(
         await db.execute(
             select(ExamQuestion, Question)
             .join(Question, Question.id == ExamQuestion.question_id)
-            .options(selectinload(Question.options))
+            .options(
+                selectinload(Question.options),
+                selectinload(Question.chapter).selectinload(Chapter.document),
+            )
             .where(ExamQuestion.exam_id == exam_id)
             .order_by(ExamQuestion.order_index)
         )
@@ -238,6 +244,8 @@ def _to_exam_session(
 def _build_results(items: List[tuple[ExamQuestion, Question]]) -> List[ExamResultItem]:
     out: List[ExamResultItem] = []
     for eq, q in items:
+        chapter = getattr(q, "chapter", None)
+        document = getattr(chapter, "document", None) if chapter is not None else None
         if q.question_type.value == "fill":
             correct_answer = q.correct_answer
         else:
@@ -250,11 +258,19 @@ def _build_results(items: List[tuple[ExamQuestion, Question]]) -> List[ExamResul
                 order_index=eq.order_index,
                 content=q.content,
                 question_type=q.question_type,
+                chapter_id=q.chapter_id,
+                chapter_title=chapter.title if chapter is not None else None,
+                document_id=document.id if document is not None else None,
+                document_title=document.title if document is not None else None,
                 selected_answer=eq.selected_answer,
                 correct_answer=correct_answer,
                 is_correct=bool(eq.is_correct),
                 is_skipped=eq.selected_answer is None,
                 source_text=q.source_text,
+                source_context=_build_source_context(
+                    chapter.content_text if chapter is not None else None,
+                    q.source_text,
+                ),
                 source_page=q.source_page,
             )
         )

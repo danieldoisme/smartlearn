@@ -15,9 +15,11 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { Input } from '@/components/ui/input'
 import {
   useBookmarks,
   useCreateBookmark,
+  useCreateNote,
   useDeleteBookmark,
 } from '@/api/bookmarks'
 import { useExamResult } from '@/api/exam'
@@ -32,6 +34,13 @@ function formatDuration(startedAt, completedAt) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
+function buildCitationHref(result) {
+  if (!result?.documentId) return null
+  const params = new URLSearchParams()
+  if (result.chapterId) params.set('focusChapterId', String(result.chapterId))
+  return `/document/${result.documentId}${params.toString() ? `?${params.toString()}` : ''}`
+}
+
 export default function ResultPage() {
   const [searchParams] = useSearchParams()
   const examIdRaw = searchParams.get('examId')
@@ -39,8 +48,12 @@ export default function ResultPage() {
   const { data, isLoading, isError } = useExamResult(examId)
   const { data: bookmarks = [] } = useBookmarks()
   const createBookmark = useCreateBookmark()
+  const createNote = useCreateNote()
   const deleteBookmark = useDeleteBookmark()
   const [expandedQ, setExpandedQ] = useState(null)
+  const [expandedContext, setExpandedContext] = useState({})
+  const [noteDrafts, setNoteDrafts] = useState({})
+  const [noteMessages, setNoteMessages] = useState({})
 
   if (!examId) {
     return (
@@ -95,6 +108,18 @@ export default function ResultPage() {
       return
     }
     await createBookmark.mutateAsync({ questionId })
+  }
+
+  const saveNote = async (questionId) => {
+    const content = noteDrafts[questionId]?.trim()
+    if (!content) return
+    try {
+      await createNote.mutateAsync({ questionId, content })
+      setNoteDrafts((prev) => ({ ...prev, [questionId]: '' }))
+      setNoteMessages((prev) => ({ ...prev, [questionId]: 'Đã lưu ghi chú.' }))
+    } catch {
+      setNoteMessages((prev) => ({ ...prev, [questionId]: 'Không thể lưu ghi chú.' }))
+    }
   }
 
   return (
@@ -211,7 +236,13 @@ export default function ResultPage() {
                     </div>
                     {q.isSkipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
                     {(q.sourcePage || q.sourceText) && (
-                      <div className="space-y-1 text-xs text-slate-400">
+                      <div className="space-y-2 text-xs text-slate-400">
+                        {(q.documentTitle || q.chapterTitle) && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {q.documentTitle && <span className="font-medium text-slate-500">{q.documentTitle}</span>}
+                            {q.chapterTitle && <span>· {q.chapterTitle}</span>}
+                          </div>
+                        )}
                         {q.sourcePage && (
                           <div className="flex items-center gap-1.5">
                             <FileText className="h-3 w-3" />
@@ -223,6 +254,62 @@ export default function ResultPage() {
                             &ldquo;{q.sourceText}&rdquo;
                           </p>
                         )}
+                        {q.sourceContext && q.sourceContext !== q.sourceText && (
+                          <div className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedContext((prev) => ({
+                                  ...prev,
+                                  [q.questionId]: !prev[q.questionId],
+                                }))
+                              }
+                              className="text-xs font-medium text-primary-600 hover:text-primary-700 cursor-pointer"
+                            >
+                              {expandedContext[q.questionId] ? 'Ẩn ngữ cảnh mở rộng' : 'Xem thêm ngữ cảnh'}
+                            </button>
+                            {expandedContext[q.questionId] && (
+                              <p className="text-slate-500 leading-relaxed vn-text">
+                                {q.sourceContext}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {buildCitationHref(q) && (
+                          <Link to={buildCitationHref(q)} className="inline-block pt-1">
+                            <Button size="sm" variant="outline">
+                              <FileText className="h-4 w-4" />
+                              Mở trong tài liệu
+                            </Button>
+                          </Link>
+                        )}
+                        <div className="space-y-2 pt-1">
+                          <Input
+                            id={`note-input-${q.questionId}`}
+                            name={`note-input-${q.questionId}`}
+                            value={noteDrafts[q.questionId] || ''}
+                            onChange={(e) =>
+                              setNoteDrafts((prev) => ({
+                                ...prev,
+                                [q.questionId]: e.target.value,
+                              }))
+                            }
+                            placeholder="Ghi chú nhanh cho câu hỏi này..."
+                          />
+                          <div className="flex items-center justify-between gap-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!noteDrafts[q.questionId]?.trim() || createNote.isPending}
+                              onClick={() => saveNote(q.questionId)}
+                            >
+                              {createNote.isPending ? 'Đang lưu...' : 'Lưu ghi chú'}
+                            </Button>
+                            {noteMessages[q.questionId] && (
+                              <span className="text-xs text-slate-500">{noteMessages[q.questionId]}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </motion.div>

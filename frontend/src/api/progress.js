@@ -1,23 +1,46 @@
 import { useQuery } from '@tanstack/react-query';
 import apiClient from './axios';
 
-export function useWeekly() {
+function buildRangeParams(range = {}) {
+  const params = {};
+  if (range.startDate) params.start_date = range.startDate;
+  if (range.endDate) params.end_date = range.endDate;
+  return params;
+}
+
+export function useWeekly(range) {
   return useQuery({
-    queryKey: ['progress', 'weekly'],
-    queryFn: async () => (await apiClient.get('/progress/weekly')).data,
+    queryKey: ['progress', 'weekly', range?.startDate ?? null, range?.endDate ?? null],
+    queryFn: async () =>
+      (await apiClient.get('/progress/weekly', { params: buildRangeParams(range) })).data,
   });
 }
 
-export function useAccuracyTrend() {
+export function useAccuracyTrend(range) {
   return useQuery({
-    queryKey: ['progress', 'accuracy-trend'],
-    queryFn: async () => (await apiClient.get('/progress/accuracy-trend')).data,
+    queryKey: ['progress', 'accuracy-trend', range?.startDate ?? null, range?.endDate ?? null],
+    queryFn: async () =>
+      (await apiClient.get('/progress/accuracy-trend', { params: buildRangeParams(range) })).data,
   });
 }
 
-export function useDocumentsProgress() {
+export function useDocumentsProgress(range) {
   return useQuery({
-    queryKey: ['progress', 'documents'],
-    queryFn: async () => (await apiClient.get('/progress/documents')).data,
+    queryKey: ['progress', 'documents', range?.startDate ?? null, range?.endDate ?? null],
+    queryFn: async () =>
+      (await apiClient.get('/progress/documents', { params: buildRangeParams(range) })).data,
+  });
+}
+
+export function useDocumentProgressDetail(documentId, range, enabled = true) {
+  return useQuery({
+    queryKey: ['progress', 'documents', documentId, 'detail', range?.startDate ?? null, range?.endDate ?? null],
+    queryFn: async () =>
+      (
+        await apiClient.get(`/progress/documents/${documentId}`, {
+          params: buildRangeParams(range),
+        })
+      ).data,
+    enabled: Boolean(documentId) && enabled,
   });
 }

@@ -11,7 +11,7 @@ class UserOut(CamelModel):
     full_name: Optional[str] = None
     email: EmailStr
     avatar_url: Optional[str] = None
-    email_verified: bool = False
+    email_verified: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

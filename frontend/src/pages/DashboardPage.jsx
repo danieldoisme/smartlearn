@@ -148,7 +148,7 @@ export default function DashboardPage() {
             <Link to="/study" className="block">
               <Button variant="outline" className="w-full justify-start gap-3">
                 <BookOpen className="h-4 w-4 text-blue-600" />
-                Tiếp tục học tập
+                Chọn chương để học
               </Button>
             </Link>
             <Link to="/exam" className="block">

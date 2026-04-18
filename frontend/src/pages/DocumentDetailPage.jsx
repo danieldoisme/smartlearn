@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -64,7 +64,12 @@ function getChapterStatus(ch) {
 export default function DocumentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const docId = id ? Number(id) : null
+  const focusChapterId = useMemo(() => {
+    const raw = searchParams.get('focusChapterId')
+    return raw ? Number(raw) : null
+  }, [searchParams])
   const { data: doc, isLoading, isError } = useDocumentDetail(docId)
   const generateQuestions = useGenerateQuestions(docId)
   const updateStructure = useUpdateDocumentStructure(docId)
@@ -75,6 +80,22 @@ export default function DocumentDetailPage() {
   const [genConfig, setGenConfig] = useState({ type: 'mixed', count: 10 })
   const [generateMessage, setGenerateMessage] = useState('')
   const [structureDraft, setStructureDraft] = useState([])
+  const chapters = useMemo(() => doc?.chapters || [], [doc])
+  const totalAnswered = doc?.totalAnswered ?? 0
+  const totalQuestions = doc?.totalQuestions ?? 0
+  const overallProgress =
+    totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0
+  const canEditStructure = totalQuestions === 0
+
+  useEffect(() => {
+    if (!focusChapterId || !chapters.length) return
+    const target = document.getElementById(`chapter-${focusChapterId}`)
+    if (!target) return
+    const timer = window.setTimeout(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [focusChapterId, chapters])
 
   if (isLoading) {
     return (
@@ -94,13 +115,6 @@ export default function DocumentDetailPage() {
       </div>
     )
   }
-
-  const chapters = doc.chapters || []
-  const totalAnswered = doc.totalAnswered ?? 0
-  const totalQuestions = doc.totalQuestions ?? 0
-  const overallProgress =
-    totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0
-  const canEditStructure = totalQuestions === 0
 
   const handleGenerate = async () => {
     if (!generateChapter) return
@@ -269,7 +283,11 @@ export default function DocumentDetailPage() {
           {chapters.map((ch) => {
             const status = getChapterStatus(ch)
             return (
-              <Card key={ch.id} className="p-4 group">
+              <Card
+                key={ch.id}
+                id={`chapter-${ch.id}`}
+                className={`p-4 group ${focusChapterId === ch.id ? 'border-primary-300 bg-primary-50/40' : ''}`}
+              >
                 <CardContent>
                   <div className="flex items-center gap-4">
                     {statusIcon(status)}
