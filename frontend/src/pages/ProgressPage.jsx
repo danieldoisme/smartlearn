@@ -215,20 +215,23 @@ export default function ProgressPage() {
             const active =
               (range.startDate || '') === preset.start && (range.endDate || '') === preset.end
             return (
-              <Button
+              <button
                 key={preset.label}
                 type="button"
-                variant={active ? 'secondary' : 'outline'}
-                size="sm"
                 onClick={() =>
                   setRange({
                     startDate: preset.start,
                     endDate: preset.end,
                   })
                 }
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                  active
+                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
+                    : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
+                }`}
               >
                 {preset.label}
-              </Button>
+              </button>
             )
           })}
         </div>
