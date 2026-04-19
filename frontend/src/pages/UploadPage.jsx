@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { getErrorMessage } from '@/lib/utils'
 import {
   useCreateTopic,
   usePreviewDocument,
@@ -93,7 +94,7 @@ export default function UploadPage() {
       })
       setPreview(data)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Không thể phân tích file.')
+      setError(getErrorMessage(err, 'Không thể phân tích file.'))
     }
   }
 
@@ -113,7 +114,7 @@ export default function UploadPage() {
       setSelectedTopic(String(topic.id))
       setNewTopic('')
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Không thể tạo chủ đề mới.')
+      setError(getErrorMessage(err, 'Không thể tạo chủ đề mới.'))
     }
   }
 
@@ -137,7 +138,7 @@ export default function UploadPage() {
       setUploadProgress(100)
       navigate(`/document/${data.id}`)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Tải lên thất bại.')
+      setError(getErrorMessage(err, 'Tải lên thất bại.'))
       setUploadProgress(0)
     }
   }

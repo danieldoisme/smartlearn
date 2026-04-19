@@ -25,6 +25,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { getErrorMessage } from '@/lib/utils'
 import { QuestionType, QuestionTypeLabel } from '@/models'
 import {
   useDocumentDetail,
@@ -59,6 +60,17 @@ function getChapterStatus(ch) {
   if (ch.questionCount > 0 && ch.answeredCount >= ch.questionCount) return 'completed'
   if (ch.answeredCount > 0) return 'in_progress'
   return 'not_started'
+}
+
+function parseOptionalPositiveInteger(value) {
+  if (value == null || value === '') return null
+
+  const normalized = String(value).trim()
+  if (!normalized) return null
+  if (!/^\d+$/.test(normalized)) return Number.NaN
+
+  const parsed = Number(normalized)
+  return parsed > 0 ? parsed : Number.NaN
 }
 
 export default function DocumentDetailPage() {
@@ -128,9 +140,7 @@ export default function DocumentDetailPage() {
       setGenerateMessage(`Đã tạo ${result.createdCount} câu hỏi.`)
       setShowGenerate(false)
     } catch (err) {
-      setGenerateMessage(
-        err?.response?.data?.detail || 'Không thể tạo câu hỏi cho chương này.'
-      )
+      setGenerateMessage(getErrorMessage(err, 'Không thể tạo câu hỏi cho chương này.'))
     }
   }
 
@@ -181,20 +191,47 @@ export default function DocumentDetailPage() {
   }
 
   const handleSaveStructure = async () => {
+    const chaptersPayload = []
+
+    for (const [index, item] of structureDraft.entries()) {
+      const title = item.title.trim()
+      const contentText = item.contentText.trim()
+      const pageStart = parseOptionalPositiveInteger(item.pageStart)
+      const pageEnd = parseOptionalPositiveInteger(item.pageEnd)
+
+      if (!title) {
+        setGenerateMessage(`Chương ${index + 1}: cần nhập tên chương.`)
+        return
+      }
+
+      if (Number.isNaN(pageStart) || Number.isNaN(pageEnd)) {
+        setGenerateMessage(
+          `Chương ${index + 1}: trang bắt đầu và trang kết thúc phải là số nguyên dương.`
+        )
+        return
+      }
+
+      if (pageStart != null && pageEnd != null && pageEnd < pageStart) {
+        setGenerateMessage(
+          `Chương ${index + 1}: trang kết thúc phải lớn hơn hoặc bằng trang bắt đầu.`
+        )
+        return
+      }
+
+      chaptersPayload.push({
+        title,
+        contentText,
+        pageStart,
+        pageEnd,
+      })
+    }
+
     try {
-      const chaptersPayload = structureDraft.map((item) => ({
-        title: item.title.trim(),
-        contentText: item.contentText.trim(),
-        pageStart: item.pageStart === '' ? null : Number(item.pageStart),
-        pageEnd: item.pageEnd === '' ? null : Number(item.pageEnd),
-      }))
       await updateStructure.mutateAsync({ chapters: chaptersPayload })
       setGenerateMessage('Đã cập nhật cấu trúc chương thành công.')
       setShowStructureEditor(false)
     } catch (err) {
-      setGenerateMessage(
-        err?.response?.data?.detail || 'Không thể cập nhật cấu trúc tài liệu.'
-      )
+      setGenerateMessage(getErrorMessage(err, 'Không thể cập nhật cấu trúc tài liệu.'))
     }
   }
 

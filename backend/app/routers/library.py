@@ -121,9 +121,7 @@ async def delete_topic(
 ):
     topic = (
         await db.execute(
-            select(Topic)
-            .where(Topic.id == topic_id)
-            .where(Topic.user_id == current.id)
+            select(Topic).where(Topic.id == topic_id).where(Topic.user_id == current.id)
         )
     ).scalar_one_or_none()
 
@@ -132,15 +130,14 @@ async def delete_topic(
 
     doc_count = (
         await db.execute(
-            select(func.count(Document.id))
-            .where(Document.topic_id == topic_id)
+            select(func.count(Document.id)).where(Document.topic_id == topic_id)
         )
     ).scalar_one()
 
     if doc_count > 0:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, 
-            "Không thể xóa chủ đề đang chứa tài liệu. Vui lòng xóa tài liệu trước."
+            status.HTTP_400_BAD_REQUEST,
+            "Không thể xóa chủ đề đang chứa tài liệu. Vui lòng xóa tài liệu trước.",
         )
 
     await db.delete(topic)
