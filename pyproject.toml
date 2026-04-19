@@ -18,4 +18,5 @@ dependencies = [
     "email-validator>=2.2.0",
     "greenlet>=3.4.0",
     "python-multipart>=0.0.20",
+    "pypdf>=5.1.0",
 ]

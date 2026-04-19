@@ -8,6 +8,7 @@ from zipfile import BadZipFile, ZipFile
 
 from backend.app.models.enums import FileType
 
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 _UPLOAD_ROOT = Path("backend/uploads")
 _WORD_NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 _REL_NS = {"r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
@@ -269,6 +270,38 @@ def _extract_pdf_text(content: bytes) -> str:
 
 
 def _extract_pdf_pages(content: bytes) -> list[str]:
+    pages = _extract_pdf_pages_pypdf(content)
+    if pages:
+        return pages
+    return _extract_pdf_pages_regex(content)
+
+
+def _extract_pdf_pages_pypdf(content: bytes) -> list[str]:
+    try:
+        from pypdf import PdfReader
+        from pypdf.errors import PdfReadError
+    except ImportError:
+        return []
+
+    try:
+        reader = PdfReader(BytesIO(content))
+    except (PdfReadError, ValueError, OSError):
+        return []
+
+    pages: list[str] = []
+    for page in reader.pages:
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        cleaned = " ".join(text.split())
+        pages.append(text if cleaned else "")
+    if any(page.strip() for page in pages):
+        return pages
+    return []
+
+
+def _extract_pdf_pages_regex(content: bytes) -> list[str]:
     text = content.decode("latin-1", errors="ignore")
     text = text.replace("\\r", "\n").replace("\\n", "\n").replace("\\t", "\t")
     raw_pages = re.split(r"/Type\s*/Page\b", text)

@@ -102,7 +102,7 @@ async def start_exam(
         if len({row[0] for row in rows}) != len(set(chapter_ids)):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Một số chương không hợp lệ")
 
-    question_ids = await _pick_question_ids(
+    pool_ids = await _pick_question_ids(
         db,
         current.id,
         payload.chapter_id,
@@ -110,10 +110,20 @@ async def start_exam(
         payload.question_type,
         payload.question_limit,
     )
-    if not question_ids:
+    if not pool_ids:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Không có câu hỏi khả dụng cho bài kiểm tra"
         )
+    if len(pool_ids) < payload.question_limit and not payload.allow_partial:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "partial_pool",
+                "available": len(pool_ids),
+                "requested": payload.question_limit,
+            },
+        )
+    question_ids = pool_ids
 
     questions = (
         (

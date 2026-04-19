@@ -58,6 +58,38 @@ const statusFilters = [
   { value: 'completed', label: 'Đã hoàn thành' },
 ]
 
+function snapshotKey(sessionType, chapterId) {
+  return `smartlearn.study.${sessionType}.${chapterId}`
+}
+
+function readSnapshot(sessionType, chapterId) {
+  if (!chapterId) return null
+  try {
+    const raw = localStorage.getItem(snapshotKey(sessionType, chapterId))
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSnapshot(sessionType, chapterId, payload) {
+  if (!chapterId) return
+  try {
+    localStorage.setItem(snapshotKey(sessionType, chapterId), JSON.stringify(payload))
+  } catch {
+    // storage quota / disabled — ignore
+  }
+}
+
+function clearSnapshot(sessionType, chapterId) {
+  if (!chapterId) return
+  try {
+    localStorage.removeItem(snapshotKey(sessionType, chapterId))
+  } catch {
+    // ignore
+  }
+}
+
 function buildCitationHref(question) {
   if (!question?.documentId) return null
   const params = new URLSearchParams()
@@ -118,10 +150,30 @@ export default function StudyPage() {
         onSuccess: (data) => {
           setSessionId(data.sessionId)
           setQuestions(data.questions || [])
+          const snap = readSnapshot(sessionType, chapterId)
+          if (snap && snap.sessionId === data.sessionId) {
+            setCurrentQ(snap.currentQ || 0)
+            setSelected(snap.selected || {})
+            setFillAnswer(snap.fillAnswer || '')
+            setSubmitted(Boolean(snap.submitted))
+            setServerResult(snap.serverResult || null)
+          }
         },
       },
     )
   }, [chapterId, reviewQuestionIds, sessionType, startStatus, startMut])
+
+  useEffect(() => {
+    if (!sessionId || chapterId == null) return
+    writeSnapshot(sessionType, chapterId, {
+      sessionId,
+      currentQ,
+      selected,
+      fillAnswer,
+      submitted,
+      serverResult,
+    })
+  }, [sessionId, chapterId, sessionType, currentQ, selected, fillAnswer, submitted, serverResult])
 
   const question = questions[currentQ]
   const totalQ = questions.length
@@ -390,6 +442,7 @@ export default function StudyPage() {
           // ignore completion error — still navigate
         }
       }
+      clearSnapshot(sessionType, chapterId)
       navigate(sessionType === SessionType.REVIEW ? '/review' : '/progress')
     }
   }

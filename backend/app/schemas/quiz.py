@@ -88,6 +88,7 @@ class ExamStart(CamelModel):
     question_type: Optional[QuestionType] = None
     question_limit: int = Field(default=10, ge=1, le=100)
     time_limit_minutes: int = Field(default=30, ge=1, le=240)
+    allow_partial: bool = False
 
 
 class ExamStartOut(CamelModel):

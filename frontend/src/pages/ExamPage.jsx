@@ -103,6 +103,7 @@ export default function ExamPage() {
   const [isPaused, setIsPaused] = useState(false)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [configError, setConfigError] = useState('')
+  const [partialPool, setPartialPool] = useState(null)
 
   const { data: availableChapters = [], isLoading: chaptersLoading } =
     useAvailableStudyChapters()
@@ -177,7 +178,7 @@ export default function ExamPage() {
     }))
   }
 
-  const startExam = async () => {
+  const startExam = async (allowPartial = false) => {
     setConfigError('')
     try {
       const data = await startMut.mutateAsync({
@@ -185,10 +186,20 @@ export default function ExamPage() {
         questionLimit: config.questionLimit,
         timeLimitMinutes: config.timeLimitMinutes,
         questionType: config.questionType === 'mixed' ? null : config.questionType,
+        allowPartial,
       })
+      setPartialPool(null)
       loadExamSession(data)
     } catch (err) {
-      setConfigError(err?.response?.data?.detail || 'Không thể tạo bài kiểm tra.')
+      const status = err?.response?.status
+      const detail = err?.response?.data?.detail
+      if (status === 409 && detail && typeof detail === 'object' && detail.code === 'partial_pool') {
+        setPartialPool({ available: detail.available, requested: detail.requested })
+        return
+      }
+      setConfigError(
+        typeof detail === 'string' ? detail : 'Không thể tạo bài kiểm tra.'
+      )
     }
   }
 
@@ -387,11 +398,40 @@ export default function ExamPage() {
               </div>
             )}
 
-            <Button onClick={startExam} disabled={!canStart || startMut.isPending}>
+            <Button onClick={() => startExam(false)} disabled={!canStart || startMut.isPending}>
               {startMut.isPending ? 'Đang tạo...' : 'Bắt đầu kiểm tra'}
             </Button>
           </CardContent>
         </Card>
+
+        <Dialog open={!!partialPool} onOpenChange={(open) => !open && setPartialPool(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Không đủ câu hỏi</DialogTitle>
+              <DialogDescription>
+                {partialPool && (
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Chỉ có {partialPool.available}/{partialPool.requested} câu khả dụng.
+                    Tiếp tục với {partialPool.available} câu?
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="ghost" onClick={() => setPartialPool(null)}>Hủy</Button>
+              <Button
+                onClick={() => {
+                  setPartialPool(null)
+                  startExam(true)
+                }}
+                disabled={startMut.isPending}
+              >
+                Tiếp tục
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </motion.div>
     )
   }

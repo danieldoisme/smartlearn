@@ -458,6 +458,9 @@ export default function DocumentDetailPage() {
                   </div>
 
                   <Input
+                    id={`chapter-title-${index}`}
+                    name={`chapter-title-${index}`}
+                    aria-label="Tên chương"
                     value={chapter.title}
                     onChange={(e) =>
                       updateDraftItem(index, { title: e.target.value })
@@ -468,6 +471,9 @@ export default function DocumentDetailPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <Input
+                      id={`chapter-start-${index}`}
+                      name={`chapter-start-${index}`}
+                      aria-label="Trang bắt đầu"
                       type="number"
                       min="1"
                       value={chapter.pageStart}
@@ -478,6 +484,9 @@ export default function DocumentDetailPage() {
                       placeholder="Trang bắt đầu"
                     />
                     <Input
+                      id={`chapter-end-${index}`}
+                      name={`chapter-end-${index}`}
+                      aria-label="Trang kết thúc"
                       type="number"
                       min="1"
                       value={chapter.pageEnd}
@@ -490,6 +499,9 @@ export default function DocumentDetailPage() {
                   </div>
 
                   <textarea
+                    id={`chapter-content-${index}`}
+                    name={`chapter-content-${index}`}
+                    aria-label="Nội dung chương"
                     value={chapter.contentText}
                     onChange={(e) =>
                       updateDraftItem(index, { contentText: e.target.value })

@@ -16,6 +16,7 @@ from backend.app.models.quiz import (
     UserAnswer,
 )
 from backend.app.services.document_processing import (
+    MAX_UPLOAD_BYTES,
     decode_base64_payload,
     detect_file_type,
     parse_document,
@@ -26,6 +27,8 @@ from backend.app.models.user import User
 from backend.app.schemas.document import (
     ChapterWithStats,
     DocumentOut,
+    DocumentPreviewOut,
+    DocumentPreviewSection,
     DocumentUploadIn,
     DocumentDetailOut,
     DocumentStructureUpdateIn,
@@ -110,14 +113,42 @@ async def create_topic(
     return TopicOut.model_validate(topic)
 
 
-@router.post(
-    "/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED
-)
-async def create_document(
-    payload: DocumentUploadIn,
+@router.delete("/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_topic(
+    topic_id: int,
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    topic = (
+        await db.execute(
+            select(Topic)
+            .where(Topic.id == topic_id)
+            .where(Topic.user_id == current.id)
+        )
+    ).scalar_one_or_none()
+
+    if topic is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+
+    doc_count = (
+        await db.execute(
+            select(func.count(Document.id))
+            .where(Document.topic_id == topic_id)
+        )
+    ).scalar_one()
+
+    if doc_count > 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, 
+            "Không thể xóa chủ đề đang chứa tài liệu. Vui lòng xóa tài liệu trước."
+        )
+
+    await db.delete(topic)
+    await db.commit()
+    return None
+
+
+def _decode_upload(payload: DocumentUploadIn):
     try:
         file_bytes = decode_base64_payload(payload.file_content_base64)
     except Exception:
@@ -126,6 +157,13 @@ async def create_document(
     if not file_bytes:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is empty")
 
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Kích thước file vượt quá giới hạn {mb} MB",
+        )
+
     try:
         file_type = detect_file_type(payload.file_name)
     except ValueError:
@@ -133,13 +171,55 @@ async def create_document(
             status.HTTP_400_BAD_REQUEST, "Chỉ hỗ trợ file PDF hoặc DOCX"
         )
 
-    topic_id = await _resolve_topic(
-        db, current.id, payload.topic_id, payload.topic_name
-    )
     title = (
         (payload.title or "").strip()
         or payload.file_name.rsplit(".", 1)[0].strip()
         or payload.file_name
+    )
+    return file_bytes, file_type, title
+
+
+@router.post("/documents/preview", response_model=DocumentPreviewOut)
+async def preview_document(
+    payload: DocumentUploadIn,
+    current: User = Depends(get_current_user),
+):
+    file_bytes, file_type, title = _decode_upload(payload)
+    sections = parse_document(file_type, file_bytes, title)
+    preview_sections = [
+        DocumentPreviewSection(
+            title=(section.get("title") or f"Phần {index}")[:255],
+            content_text=(section.get("content_text") or "")[:400],
+            page_start=section.get("page_start"),
+            page_end=section.get("page_end"),
+            content_chars=len(section.get("content_text") or ""),
+        )
+        for index, section in enumerate(sections, start=1)
+    ]
+    total_chars = sum(sec.content_chars for sec in preview_sections)
+    return DocumentPreviewOut(
+        file_name=payload.file_name,
+        file_type=file_type,
+        file_size=len(file_bytes),
+        title=title[:255],
+        chapter_count=len(preview_sections),
+        total_chars=total_chars,
+        sections=preview_sections,
+    )
+
+
+@router.post(
+    "/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED
+)
+async def create_document(
+    payload: DocumentUploadIn,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    file_bytes, file_type, title = _decode_upload(payload)
+
+    topic_id = await _resolve_topic(
+        db, current.id, payload.topic_id, payload.topic_name
     )
 
     stored_path = store_uploaded_file(current.id, payload.file_name, file_bytes)

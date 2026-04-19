@@ -9,11 +9,13 @@ export function useStartExam() {
       questionLimit = 10,
       timeLimitMinutes = 30,
       questionType = null,
+      allowPartial = false,
     } = {}) => {
       const body = { questionLimit, timeLimitMinutes };
       if (chapterId != null) body.chapterId = chapterId;
       if (chapterIds?.length) body.chapterIds = chapterIds;
       if (questionType) body.questionType = questionType;
+      if (allowPartial) body.allowPartial = true;
       return (await apiClient.post('/exams', body)).data;
     },
   });

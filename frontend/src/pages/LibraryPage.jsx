@@ -12,6 +12,7 @@ import {
   Plus,
   Grid3X3,
   List,
+  X,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,8 @@ import {
   useDocuments,
   useUpdateDocument,
   useTopics,
+  useDeleteTopic,
+  useCreateTopic,
 } from '@/api/library'
 
 function formatFileSize(bytes) {
@@ -59,20 +62,32 @@ export default function LibraryPage() {
   const [activeTopicId, setActiveTopicId] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const [deleteDoc, setDeleteDoc] = useState(null)
+  const [deleteTopic, setDeleteTopic] = useState(null)
+  const [deleteTopicError, setDeleteTopicError] = useState(null)
   const [editDoc, setEditDoc] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editTopicId, setEditTopicId] = useState('')
   const [menuOpen, setMenuOpen] = useState(null)
+  const [createTopicDialogOpen, setCreateTopicDialogOpen] = useState(false)
+  const [newTopic, setNewTopic] = useState('')
+  const [createTopicError, setCreateTopicError] = useState('')
 
   const { data: topics = [] } = useTopics()
   const { data: documents = [], isLoading } = useDocuments(activeTopicId)
   const updateDocument = useUpdateDocument()
   const deleteDocument = useDeleteDocument()
+  const deleteTopicMutation = useDeleteTopic()
+  const createTopic = useCreateTopic()
 
-  const filtered = useMemo(
-    () => documents.filter((doc) => doc.title.toLowerCase().includes(search.toLowerCase())),
-    [documents, search]
-  )
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return documents
+    return documents.filter((doc) => {
+      const title = (doc.title || '').toLowerCase()
+      const topic = (doc.topicName || '').toLowerCase()
+      return title.includes(q) || topic.includes(q)
+    })
+  }, [documents, search])
 
   const openEditDialog = (doc) => {
     setEditDoc(doc)
@@ -102,6 +117,7 @@ export default function LibraryPage() {
           <Input
             id="document-search"
             name="document-search"
+            aria-label="Tìm kiếm tài liệu"
             placeholder="Tìm kiếm tài liệu..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -138,18 +154,35 @@ export default function LibraryPage() {
           Tất cả
         </button>
         {topics.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTopicId(t.id)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-              activeTopicId === t.id
-                ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            {t.name}
-          </button>
+          <div key={t.id} className="relative group inline-flex">
+            <button
+              onClick={() => setActiveTopicId(t.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer truncate max-w-[200px] ${
+                activeTopicId === t.id
+                  ? 'bg-primary-50 text-primary-700 border border-primary-200 pr-8'
+                  : 'text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 pr-8'
+              }`}
+            >
+              {t.name}
+            </button>
+            <button
+              onClick={() => { setDeleteTopicError(null); setDeleteTopic(t); }}
+              className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-md transition-opacity ${
+                activeTopicId === t.id ? 'text-primary-400 hover:text-red-500 hover:bg-primary-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'text-slate-400 hover:text-red-500 hover:bg-slate-100 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+              }`}
+              aria-label="Xóa chủ đề"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         ))}
+        <button
+          onClick={() => setCreateTopicDialogOpen(true)}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500 border border-dashed border-slate-300 hover:border-primary-400 hover:text-primary-600 transition-colors flex items-center justify-center cursor-pointer"
+          aria-label="Thêm chủ đề mới"
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Thêm chủ đề
+        </button>
       </motion.div>
 
       {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
@@ -302,6 +335,49 @@ export default function LibraryPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!deleteTopic} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteTopic(null);
+          setDeleteTopicError(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa chủ đề</DialogTitle>
+            <DialogDescription className="whitespace-pre-wrap">
+              Bạn có chắc chắn muốn xóa chủ đề &quot;{deleteTopic?.name}&quot;?
+              {deleteTopicError && (
+                <span className="block mt-2 font-medium text-red-600">
+                  {deleteTopicError}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => { setDeleteTopic(null); setDeleteTopicError(null); }}>Hủy</Button>
+            <Button
+              variant="danger"
+              disabled={deleteTopicMutation.isPending}
+              onClick={async () => {
+                if (!deleteTopic) return
+                setDeleteTopicError(null)
+                try {
+                  await deleteTopicMutation.mutateAsync(deleteTopic.id)
+                  if (activeTopicId === deleteTopic.id) {
+                    setActiveTopicId(null)
+                  }
+                  setDeleteTopic(null)
+                } catch (error) {
+                  setDeleteTopicError(error.response?.data?.detail || 'Không thể xóa chủ đề này.')
+                }
+              }}
+            >
+              {deleteTopicMutation.isPending ? 'Đang xóa...' : 'Xóa'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!editDoc} onOpenChange={() => setEditDoc(null)}>
         <DialogContent>
           <DialogHeader>
@@ -312,8 +388,10 @@ export default function LibraryPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Tên tài liệu</label>
+              <label htmlFor="edit-title" className="text-sm font-medium text-slate-700">Tên tài liệu</label>
               <Input
+                id="edit-title"
+                name="edit-title"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Tên tài liệu"
@@ -325,6 +403,7 @@ export default function LibraryPage() {
               </label>
               <select
                 id="topic-select"
+                name="topic-select"
                 value={editTopicId}
                 onChange={(e) => setEditTopicId(e.target.value)}
                 className="glass-input h-11 w-full px-4 text-sm text-slate-800"
@@ -353,6 +432,55 @@ export default function LibraryPage() {
               }}
             >
               {updateDocument.isPending ? 'Đang lưu...' : 'Lưu'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={createTopicDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setCreateTopicDialogOpen(false);
+          setNewTopic('');
+          setCreateTopicError('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tạo chủ đề mới</DialogTitle>
+            <DialogDescription className="sr-only">
+              Nhập tên để tạo một chủ đề phân loại mới.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="new-topic-name" className="text-sm font-medium text-slate-700">Tên chủ đề</label>
+              <Input
+                id="new-topic-name"
+                name="new-topic-name"
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                placeholder="Ví dụ: AI Agents..."
+              />
+              {createTopicError && (
+                <p className="text-sm font-medium text-red-600 mt-1">{createTopicError}</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setCreateTopicDialogOpen(false)}>Hủy</Button>
+            <Button
+              disabled={!newTopic.trim() || createTopic.isPending}
+              onClick={async () => {
+                setCreateTopicError('')
+                try {
+                  await createTopic.mutateAsync({ name: newTopic.trim() })
+                  setCreateTopicDialogOpen(false)
+                  setNewTopic('')
+                } catch (error) {
+                  setCreateTopicError(error.response?.data?.detail || 'Không thể tạo chủ đề.')
+                }
+              }}
+            >
+              {createTopic.isPending ? 'Đang lưu...' : 'Thêm'}
             </Button>
           </DialogFooter>
         </DialogContent>

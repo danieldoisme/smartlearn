@@ -18,6 +18,32 @@ export function useCreateTopic() {
   });
 }
 
+export function useDeleteTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) => {
+      await apiClient.delete(`/topics/${id}`);
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['topics'] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function usePreviewDocument() {
+  return useMutation({
+    mutationFn: async ({ fileName, fileContentBase64 }) =>
+      (
+        await apiClient.post('/documents/preview', {
+          fileName,
+          fileContentBase64,
+        })
+      ).data,
+  });
+}
+
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({

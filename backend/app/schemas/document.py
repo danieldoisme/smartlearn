@@ -27,6 +27,24 @@ class DocumentUploadIn(CamelModel):
     topic_name: Optional[str] = Field(default=None, max_length=100)
 
 
+class DocumentPreviewSection(CamelModel):
+    title: str
+    content_text: str
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    content_chars: int = 0
+
+
+class DocumentPreviewOut(CamelModel):
+    file_name: str
+    file_type: FileType
+    file_size: int
+    title: str
+    chapter_count: int
+    total_chars: int
+    sections: list[DocumentPreviewSection]
+
+
 class DocumentUpdateIn(CamelModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
     topic_id: Optional[int] = None

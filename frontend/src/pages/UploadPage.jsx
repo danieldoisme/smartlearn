@@ -17,9 +17,12 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
   useCreateTopic,
+  usePreviewDocument,
   useTopics,
   useUploadDocument,
 } from '@/api/library'
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -32,6 +35,8 @@ function fileToBase64(file) {
 
 export default function UploadPage() {
   const [file, setFile] = useState(null)
+  const [fileBase64, setFileBase64] = useState('')
+  const [preview, setPreview] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [selectedTopic, setSelectedTopic] = useState('')
@@ -42,30 +47,61 @@ export default function UploadPage() {
 
   const { data: topics = [] } = useTopics()
   const createTopic = useCreateTopic()
+  const previewDocument = usePreviewDocument()
   const uploadDocument = useUploadDocument()
   const uploading = uploadDocument.isPending
+  const previewing = previewDocument.isPending
+
+  const acceptFile = (candidate) => {
+    if (!candidate) return
+    const isValidType =
+      candidate.type === 'application/pdf' || candidate.name.endsWith('.docx')
+    if (!isValidType) {
+      setError('Chỉ hỗ trợ file PDF hoặc DOCX.')
+      return
+    }
+    if (candidate.size > MAX_UPLOAD_BYTES) {
+      const mb = MAX_UPLOAD_BYTES / (1024 * 1024)
+      setError(`Kích thước file vượt quá giới hạn ${mb} MB.`)
+      return
+    }
+    setError('')
+    setFile(candidate)
+    setFileBase64('')
+    setPreview(null)
+  }
 
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped && (dropped.type === 'application/pdf' || dropped.name.endsWith('.docx'))) {
-      setError('')
-      setFile(dropped)
-      return
-    }
-    setError('Chỉ hỗ trợ file PDF hoặc DOCX.')
+    acceptFile(e.dataTransfer.files[0])
   }
 
   const handleFileSelect = (e) => {
-    const selected = e.target.files[0]
-    if (!selected) return
-    if (selected.type === 'application/pdf' || selected.name.endsWith('.docx')) {
-      setError('')
-      setFile(selected)
-      return
+    acceptFile(e.target.files[0])
+  }
+
+  const handlePreview = async () => {
+    if (!file) return
+    setError('')
+    try {
+      const fileContentBase64 = fileBase64 || (await fileToBase64(file))
+      if (!fileBase64) setFileBase64(fileContentBase64)
+      const data = await previewDocument.mutateAsync({
+        fileName: file.name,
+        fileContentBase64,
+      })
+      setPreview(data)
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Không thể phân tích file.')
     }
-    setError('Chỉ hỗ trợ file PDF hoặc DOCX.')
+  }
+
+  const resetFile = () => {
+    setFile(null)
+    setFileBase64('')
+    setPreview(null)
+    setUploadProgress(0)
   }
 
   const handleCreateTopic = async () => {
@@ -86,7 +122,8 @@ export default function UploadPage() {
     setError('')
     setUploadProgress(10)
     try {
-      const fileContentBase64 = await fileToBase64(file)
+      const fileContentBase64 = fileBase64 || (await fileToBase64(file))
+      if (!fileBase64) setFileBase64(fileContentBase64)
       const data = await uploadDocument.mutateAsync({
         fileName: file.name,
         fileContentBase64,
@@ -172,7 +209,7 @@ export default function UploadPage() {
               {!uploading && (
                 <button
                   type="button"
-                  onClick={() => setFile(null)}
+                  onClick={resetFile}
                   className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X className="h-4 w-4" />
@@ -190,10 +227,71 @@ export default function UploadPage() {
               </div>
             )}
 
-            {!uploading && (
+            {!uploading && !preview && (
               <>
+                {error && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    {error}
+                  </div>
+                )}
+                <Button
+                  onClick={handlePreview}
+                  className="w-full"
+                  size="lg"
+                  disabled={previewing}
+                >
+                  <FileText className="h-4 w-4" />
+                  {previewing ? 'Đang phân tích...' : 'Phân tích trước khi lưu'}
+                </Button>
+              </>
+            )}
+
+            {!uploading && preview && (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Xem trước cấu trúc
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {preview.chapterCount} chương · {preview.totalChars.toLocaleString('vi-VN')} ký tự
+                      </p>
+                    </div>
+                    <Badge variant="secondary">{preview.fileType?.toUpperCase?.()}</Badge>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {preview.sections.map((section, idx) => (
+                      <div
+                        key={`${section.title}-${idx}`}
+                        className="rounded-lg bg-white border border-slate-100 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-slate-700 truncate">
+                            {idx + 1}. {section.title}
+                          </p>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {section.contentChars.toLocaleString('vi-VN')} ký tự
+                            {section.pageStart ? ` · tr. ${section.pageStart}` : ''}
+                          </span>
+                        </div>
+                        {section.contentText && (
+                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 vn-text">
+                            {section.contentText}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {preview.chapterCount === 0 && (
+                    <p className="text-xs text-amber-600">
+                      Không trích xuất được nội dung. Kiểm tra lại file.
+                    </p>
+                  )}
+                </div>
+
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-2">
+                  <label htmlFor="new-topic" className="block text-xs font-medium text-slate-600 mb-2">
                     Chủ đề (tùy chọn)
                   </label>
                   <div className="flex gap-2 flex-wrap mb-2">
@@ -214,6 +312,8 @@ export default function UploadPage() {
                   </div>
                   <div className="flex gap-2">
                     <Input
+                      id="new-topic"
+                      name="new-topic"
                       placeholder="Hoặc tạo chủ đề mới..."
                       value={newTopic}
                       onChange={(e) => setNewTopic(e.target.value)}
@@ -236,15 +336,25 @@ export default function UploadPage() {
                   </div>
                 )}
 
-                <Button
-                  onClick={handleUpload}
-                  className="w-full"
-                  size="lg"
-                  disabled={uploading}
-                >
-                  <Upload className="h-4 w-4" />
-                  Tải lên và phân tích
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    className="flex-1"
+                    onClick={() => setPreview(null)}
+                    disabled={uploading}
+                  >
+                    Quay lại
+                  </Button>
+                  <Button
+                    onClick={handleUpload}
+                    className="flex-1"
+                    size="lg"
+                    disabled={uploading || preview.chapterCount === 0}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Xác nhận tải lên
+                  </Button>
+                </div>
               </>
             )}
 
