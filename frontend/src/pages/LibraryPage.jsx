@@ -190,7 +190,7 @@ export default function LibraryPage() {
       {viewMode === 'grid' ? (
         <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((doc) => (
-            <Card key={doc.id} className="p-5 group relative">
+            <Card key={doc.id} className={`p-5 group relative ${menuOpen === doc.id ? 'z-50' : ''}`}>
               <CardContent>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
@@ -253,7 +253,7 @@ export default function LibraryPage() {
       ) : (
         <motion.div variants={item} className="space-y-2">
           {filtered.map((doc) => (
-            <Card key={doc.id} className="p-4">
+            <Card key={doc.id} className={`p-4 ${menuOpen === doc.id ? 'relative z-50' : ''}`}>
               <CardContent className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
                   <FileText className="h-5 w-5 text-primary-600" />

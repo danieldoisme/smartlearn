@@ -6,6 +6,12 @@ from urllib.parse import quote_plus
 class Settings(BaseSettings):
     AI_SERVER_URL: str
     AI_API_KEY: str
+    AI_PARSER_MODEL: str = "qwen"
+    AI_PARSER_TIMEOUT_SECONDS: float = 90.0
+    AI_PARSER_MAX_CHARS: int = 48000
+    AI_PARSER_MAX_INPUT_TOKENS: int = 8500
+    AI_PARSER_MAX_TOKENS: int = 4000
+    AI_PARSER_MIN_CONFIDENCE: float = 0.45
 
     DB_HOST: str
     DB_PORT: int = 3306

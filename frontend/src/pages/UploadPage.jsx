@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -9,6 +9,10 @@ import {
   Check,
   CloudUpload,
   FolderPlus,
+  Trash2,
+  Plus,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -40,6 +44,7 @@ export default function UploadPage() {
   const [preview, setPreview] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadPhase, setUploadPhase] = useState('idle')
   const [selectedTopic, setSelectedTopic] = useState('')
   const [newTopic, setNewTopic] = useState('')
   const [error, setError] = useState('')
@@ -52,6 +57,27 @@ export default function UploadPage() {
   const uploadDocument = useUploadDocument()
   const uploading = uploadDocument.isPending
   const previewing = previewDocument.isPending
+
+  useEffect(() => {
+    let timer
+    if (uploadPhase === 'processing') {
+      timer = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 95) return 95
+          const diff = 95 - prev
+          const step = Math.max(diff * 0.06, 0.3)
+          return Math.min(prev + step, 95)
+        })
+      }, 120)
+    }
+    return () => clearInterval(timer)
+  }, [uploadPhase])
+  const parserModeLabel = preview?.parserMode === 'ai'
+    ? 'AI parser'
+    : preview?.parserMode === 'fallback'
+      ? 'Parser dự phòng'
+      : 'Parser'
+  const previewWarnings = preview?.warnings ?? []
 
   const acceptFile = (candidate) => {
     if (!candidate) return
@@ -103,6 +129,7 @@ export default function UploadPage() {
     setFileBase64('')
     setPreview(null)
     setUploadProgress(0)
+    setUploadPhase('idle')
   }
 
   const handleCreateTopic = async () => {
@@ -121,25 +148,37 @@ export default function UploadPage() {
   const handleUpload = async () => {
     if (!file) return
     setError('')
-    setUploadProgress(10)
+    setUploadProgress(0)
+    setUploadPhase('uploading')
     try {
       const fileContentBase64 = fileBase64 || (await fileToBase64(file))
       if (!fileBase64) setFileBase64(fileContentBase64)
+
+      const onUploadProgress = (progressEvent) => {
+        if (progressEvent.total) {
+          const pct = (progressEvent.loaded / progressEvent.total) * 70
+          setUploadProgress(pct)
+          if (progressEvent.loaded >= progressEvent.total) {
+            setUploadPhase('processing')
+          }
+        }
+      }
+
       const data = await uploadDocument.mutateAsync({
         fileName: file.name,
         fileContentBase64,
         topicId: selectedTopic ? Number(selectedTopic) : null,
         topicName: newTopic.trim() || null,
-        onUploadProgress: (event) => {
-          if (!event.total) return
-          setUploadProgress(Math.min(Math.round((event.loaded / event.total) * 100), 100))
-        },
+        chapters: preview.sections,
+        onUploadProgress,
       })
+      setUploadPhase('done')
       setUploadProgress(100)
-      navigate(`/document/${data.id}`)
+      setTimeout(() => navigate(`/document/${data.id}`), 700)
     } catch (err) {
       setError(getErrorMessage(err, 'Tải lên thất bại.'))
       setUploadProgress(0)
+      setUploadPhase('idle')
     }
   }
 
@@ -218,11 +257,17 @@ export default function UploadPage() {
               )}
             </div>
 
-            {uploading && (
+            {(uploading || uploadPhase === 'done') && (
               <div className="space-y-2">
                 <Progress value={Math.min(uploadProgress, 100)} className="h-2" />
                 <div className="flex justify-between text-xs text-slate-500">
-                  <span>{uploadProgress >= 100 ? 'Đang hoàn tất...' : 'Đang tải lên và phân tích...'}</span>
+                  <span>
+                    {uploadPhase === 'done'
+                      ? 'Hoàn tất!'
+                      : uploadPhase === 'processing'
+                        ? 'Đang xử lý trên máy chủ...'
+                        : 'Đang tải lên...'}
+                  </span>
                   <span>{Math.min(Math.round(uploadProgress), 100)}%</span>
                 </div>
               </div>
@@ -241,8 +286,12 @@ export default function UploadPage() {
                   size="lg"
                   disabled={previewing}
                 >
-                  <FileText className="h-4 w-4" />
-                  {previewing ? 'Đang phân tích...' : 'Phân tích trước khi lưu'}
+                  {previewing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {previewing ? 'AI đang phân tích...' : 'Phân tích bằng AI trước khi lưu'}
                 </Button>
               </>
             )}
@@ -253,36 +302,152 @@ export default function UploadPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">
-                        Xem trước cấu trúc
+                        Xem trước cấu trúc do AI đề xuất
                       </p>
                       <p className="text-xs text-slate-500">
                         {preview.chapterCount} chương · {preview.totalChars.toLocaleString('vi-VN')} ký tự
                       </p>
                     </div>
-                    <Badge variant="secondary">{preview.fileType?.toUpperCase?.()}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{preview.fileType?.toUpperCase?.()}</Badge>
+                      <Badge variant={preview.parserMode === 'ai' ? 'default' : 'secondary'}>
+                        {parserModeLabel}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                    {preview.sections.map((section, idx) => (
-                      <div
-                        key={`${section.title}-${idx}`}
-                        className="rounded-lg bg-white border border-slate-100 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-medium text-slate-700 truncate">
-                            {idx + 1}. {section.title}
-                          </p>
-                          <span className="text-[10px] text-slate-400 shrink-0">
-                            {section.contentChars.toLocaleString('vi-VN')} ký tự
-                            {section.pageStart ? ` · tr. ${section.pageStart}` : ''}
-                          </span>
-                        </div>
-                        {section.contentText && (
-                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 vn-text">
-                            {section.contentText}
-                          </p>
-                        )}
-                      </div>
+                  {(preview.reviewRequired || previewWarnings.length > 0) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 space-y-1">
+                      <p className="font-medium">
+                        {preview.parserMode === 'ai'
+                          ? 'AI cần bạn kiểm tra lại cấu trúc trước khi lưu.'
+                          : 'Hệ thống đang dùng parser dự phòng. Nên kiểm tra lại cấu trúc.'}
+                      </p>
+                      {typeof preview.confidence === 'number' && (
+                        <p>Độ tin cậy AI: {Math.round(preview.confidence * 100)}%</p>
+                      )}
+                      {previewWarnings.map((warning, idx) => (
+                        <p key={`${warning}-${idx}`}>• {warning}</p>
+                      ))}
+                    </div>
+                  )}
+                  <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
+                    {preview.sections.map((section, index) => (
+                      <Card key={`section-${index}`} className="p-4">
+                        <CardContent className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-semibold text-slate-800">
+                              Chương {index + 1}
+                            </h3>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                const newSections = preview.sections.filter((_, i) => i !== index);
+                                setPreview({ ...preview, sections: newSections, chapterCount: newSections.length });
+                              }}
+                              disabled={preview.sections.length <= 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                            <span>
+                              {(section.contentChars || 0).toLocaleString('vi-VN')} ký tự
+                            </span>
+                            <span>Ô nội dung có thể cuộn hoặc kéo giãn để xem hết</span>
+                          </div>
+
+                          <Input
+                            id={`chapter-title-${index}`}
+                            name={`chapter-title-${index}`}
+                            aria-label="Tên chương"
+                            value={section.title || ''}
+                            onChange={(e) => {
+                              const newSections = [...preview.sections];
+                              newSections[index] = { ...section, title: e.target.value };
+                              setPreview({ ...preview, sections: newSections });
+                            }}
+                            placeholder="Tên chương"
+                          />
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              id={`chapter-start-${index}`}
+                              name={`chapter-start-${index}`}
+                              aria-label="Trang bắt đầu"
+                              type="number"
+                              min="1"
+                              value={section.pageStart ?? ''}
+                              onChange={(e) => {
+                                const newSections = [...preview.sections];
+                                const val = e.target.value === '' ? null : Number(e.target.value);
+                                newSections[index] = { ...section, pageStart: val };
+                                setPreview({ ...preview, sections: newSections });
+                              }}
+                              placeholder="Trang bắt đầu"
+                            />
+                            <Input
+                              id={`chapter-end-${index}`}
+                              name={`chapter-end-${index}`}
+                              aria-label="Trang kết thúc"
+                              type="number"
+                              min="1"
+                              value={section.pageEnd ?? ''}
+                              onChange={(e) => {
+                                const newSections = [...preview.sections];
+                                const val = e.target.value === '' ? null : Number(e.target.value);
+                                newSections[index] = { ...section, pageEnd: val };
+                                setPreview({ ...preview, sections: newSections });
+                              }}
+                              placeholder="Trang kết thúc"
+                            />
+                          </div>
+
+                          <textarea
+                            id={`chapter-content-${index}`}
+                            name={`chapter-content-${index}`}
+                            aria-label="Nội dung chương"
+                            value={section.contentText || ''}
+                            onChange={(e) => {
+                              const newSections = [...preview.sections];
+                              newSections[index] = { 
+                                ...section, 
+                                contentText: e.target.value,
+                                contentChars: e.target.value.length
+                              };
+                              setPreview({ ...preview, sections: newSections });
+                            }}
+                            rows={12}
+                            className="glass-input min-h-[16rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+                            placeholder="Nội dung chương"
+                          />
+                        </CardContent>
+                      </Card>
                     ))}
+                  </div>
+
+                  <div className="flex justify-start">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newSections = [
+                          ...preview.sections,
+                          {
+                            title: `Chương ${preview.sections.length + 1}`,
+                            contentText: '',
+                            contentChars: 0,
+                            pageStart: null,
+                            pageEnd: null
+                          }
+                        ];
+                        setPreview({ ...preview, sections: newSections, chapterCount: newSections.length });
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Thêm chương mới
+                    </Button>
                   </div>
                   {preview.chapterCount === 0 && (
                     <p className="text-xs text-amber-600">

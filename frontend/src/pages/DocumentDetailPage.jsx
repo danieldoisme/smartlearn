@@ -477,10 +477,10 @@ export default function DocumentDetailPage() {
               </div>
             )}
 
-            {structureDraft.map((chapter, index) => (
-              <Card key={`${index}-${chapter.title}`} className="p-4">
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
+	            {structureDraft.map((chapter, index) => (
+	              <Card key={`${index}-${chapter.title}`} className="p-4">
+	                <CardContent className="space-y-3">
+	                  <div className="flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-slate-800">
                       Chương {index + 1}
                     </h3>
@@ -490,12 +490,19 @@ export default function DocumentDetailPage() {
                       onClick={() => removeDraftItem(index)}
                       disabled={structureDraft.length <= 1 || !canEditStructure}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+	                      <Trash2 className="h-4 w-4" />
+	                    </Button>
+	                  </div>
 
-                  <Input
-                    id={`chapter-title-${index}`}
+	                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+	                    <span>
+	                      {(chapter.contentText || '').length.toLocaleString('vi-VN')} ký tự
+	                    </span>
+	                    <span>Ô nội dung có thể cuộn hoặc kéo giãn để xem hết</span>
+	                  </div>
+
+	                  <Input
+	                    id={`chapter-title-${index}`}
                     name={`chapter-title-${index}`}
                     aria-label="Tên chương"
                     value={chapter.title}
@@ -540,15 +547,15 @@ export default function DocumentDetailPage() {
                     name={`chapter-content-${index}`}
                     aria-label="Nội dung chương"
                     value={chapter.contentText}
-                    onChange={(e) =>
-                      updateDraftItem(index, { contentText: e.target.value })
-                    }
-                    disabled={!canEditStructure}
-                    rows={6}
-                    className="glass-input w-full rounded-xl px-4 py-3 text-sm text-slate-800"
-                    placeholder="Nội dung chương"
-                  />
-                </CardContent>
+	                    onChange={(e) =>
+	                      updateDraftItem(index, { contentText: e.target.value })
+	                    }
+	                    disabled={!canEditStructure}
+	                    rows={12}
+	                    className="glass-input min-h-[16rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+	                    placeholder="Nội dung chương"
+	                  />
+	                </CardContent>
               </Card>
             ))}
           </div>

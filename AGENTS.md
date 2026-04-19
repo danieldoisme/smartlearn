@@ -4,7 +4,7 @@ This document describes the AI modules in SmartLearn and which use cases they se
 
 ## Automated Question Generation (AQG) Agent
 
-The only AI-powered module in the system. Uses Hugging Face Transformers to turn chapter text into quiz questions.
+Uses Hugging Face Transformers to turn curated chapter text into quiz questions.
 
 - **Use Case**: UC-05 (Tạo câu hỏi tự động từ tài liệu)
 - **What it does**:
@@ -14,13 +14,21 @@ The only AI-powered module in the system. Uses Hugging Face Transformers to turn
 
 ---
 
+## Document Understanding & Structure Extraction Agent
+
+AI-powered document parsing that builds a reliable content hierarchy out of uploaded files.
+
+- **Use Case**: UC-03 (Upload tài liệu & Phân tích cấu trúc)
+- **What it does**:
+    - Reads PDF/DOCX files and extracts clean text.
+    - Infers chapter/section boundaries semantically and preserves source/page metadata for accurate downstream question generation.
+    - Allows the user to review and correct the proposed structure before saving when confidence is low.
+
+---
+
 ## Supporting Modules (non-AI)
 
-These are standard application features that work alongside the AQG agent but do not use machine learning or NLP themselves.
-
-### Document Parser — UC-03 (Upload tài liệu & Phân tích cấu trúc)
-
-Rule-based structural analysis. Reads PDF/DOCX files, identifies chapters/sections from logical markers (headings, page breaks), extracts clean text, and builds a content hierarchy. This clean text is what the AQG agent consumes.
+These are standard application features that work alongside the AI parsing and AQG agents but do not use machine learning or NLP themselves.
 
 ### Citation Linker — UC-08 (Xem nguồn trích dẫn)
 
@@ -34,7 +42,7 @@ Database filtering. Queries `user_answers` for rows where `is_correct = FALSE`, 
 
 ## How They Connect
 
-1. **Document Parser** processes the uploaded PDF → structured chapters with clean text.
+1. **Document Understanding & Structure Extraction Agent** processes the uploaded PDF/DOCX → structured chapters with clean text and citation metadata.
 2. **AQG Agent** reads a selected chapter → generates questions with source citations.
 3. **Citation Linker** surfaces the source passage → shown as feedback after each answer.
 4. **Mistake Review** collects wrong answers → builds review sessions from the question pool.

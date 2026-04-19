@@ -19,12 +19,20 @@ class DocumentOut(CamelModel):
     updated_at: datetime
 
 
+class ChapterStructureIn(CamelModel):
+    title: str = Field(min_length=1, max_length=255)
+    content_text: str = Field(default="")
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+
+
 class DocumentUploadIn(CamelModel):
     file_name: str = Field(min_length=1, max_length=255)
     file_content_base64: str = Field(min_length=1)
     title: Optional[str] = Field(default=None, max_length=255)
     topic_id: Optional[int] = None
     topic_name: Optional[str] = Field(default=None, max_length=100)
+    chapters: Optional[list[ChapterStructureIn]] = None
 
 
 class DocumentPreviewSection(CamelModel):
@@ -43,6 +51,10 @@ class DocumentPreviewOut(CamelModel):
     chapter_count: int
     total_chars: int
     sections: list[DocumentPreviewSection]
+    parser_mode: str = "fallback"
+    review_required: bool = False
+    confidence: Optional[float] = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class DocumentUpdateIn(CamelModel):
@@ -78,13 +90,6 @@ class DocumentDetailOut(LibraryDocumentOut):
     chapters: list[ChapterWithStats] = []
     total_questions: int = 0
     total_answered: int = 0
-
-
-class ChapterStructureIn(CamelModel):
-    title: str = Field(min_length=1, max_length=255)
-    content_text: str = Field(default="")
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
 
 
 class DocumentStructureUpdateIn(CamelModel):

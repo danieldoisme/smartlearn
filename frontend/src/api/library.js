@@ -53,6 +53,7 @@ export function useUploadDocument() {
       title,
       topicId,
       topicName,
+      chapters,
       onUploadProgress,
     }) =>
       (
@@ -64,6 +65,7 @@ export function useUploadDocument() {
             title,
             topicId,
             topicName,
+            chapters,
           },
           { onUploadProgress }
         )

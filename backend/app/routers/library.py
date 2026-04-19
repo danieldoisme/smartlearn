@@ -182,7 +182,7 @@ async def preview_document(
     current: User = Depends(get_current_user),
 ):
     file_bytes, file_type, title = _decode_upload(payload)
-    sections = parse_document(file_type, file_bytes, title)
+    parsed = await parse_document(file_type, file_bytes, title)
     preview_sections = [
         DocumentPreviewSection(
             title=(section.get("title") or f"Phần {index}")[:255],
@@ -191,7 +191,7 @@ async def preview_document(
             page_end=section.get("page_end"),
             content_chars=len(section.get("content_text") or ""),
         )
-        for index, section in enumerate(sections, start=1)
+        for index, section in enumerate(parsed.sections, start=1)
     ]
     total_chars = sum(sec.content_chars for sec in preview_sections)
     return DocumentPreviewOut(
@@ -202,6 +202,10 @@ async def preview_document(
         chapter_count=len(preview_sections),
         total_chars=total_chars,
         sections=preview_sections,
+        parser_mode=parsed.parser_mode,
+        review_required=parsed.review_required,
+        confidence=parsed.confidence,
+        warnings=parsed.warnings,
     )
 
 
@@ -220,7 +224,19 @@ async def create_document(
     )
 
     stored_path = store_uploaded_file(current.id, payload.file_name, file_bytes)
-    sections = parse_document(file_type, file_bytes, title)
+    if payload.chapters:
+        sections = [
+            {
+                "title": chapter.title,
+                "content_text": chapter.content_text,
+                "page_start": chapter.page_start,
+                "page_end": chapter.page_end,
+            }
+            for chapter in payload.chapters
+        ]
+    else:
+        parsed = await parse_document(file_type, file_bytes, title)
+        sections = parsed.sections
 
     document = Document(
         user_id=current.id,
