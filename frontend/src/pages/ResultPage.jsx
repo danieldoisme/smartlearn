@@ -37,7 +37,10 @@ function formatDuration(startedAt, completedAt) {
 function buildCitationHref(result) {
   if (!result?.documentId) return null
   const params = new URLSearchParams()
-  if (result.chapterId) params.set('focusChapterId', String(result.chapterId))
+  if (result.chapterId) {
+    params.set('focusChapterId', String(result.chapterId))
+    params.set('openChapterId', String(result.chapterId))
+  }
   return `/document/${result.documentId}${params.toString() ? `?${params.toString()}` : ''}`
 }
 
@@ -51,7 +54,6 @@ export default function ResultPage() {
   const createNote = useCreateNote()
   const deleteBookmark = useDeleteBookmark()
   const [expandedQ, setExpandedQ] = useState(null)
-  const [expandedContext, setExpandedContext] = useState({})
   const [noteDrafts, setNoteDrafts] = useState({})
   const [noteMessages, setNoteMessages] = useState({})
 
@@ -235,7 +237,7 @@ export default function ResultPage() {
                       </Button>
                     </div>
                     {q.isSkipped && <p className="text-slate-400">Câu này đã bỏ qua — Đáp án đúng: {q.correctAnswer}</p>}
-                    {(q.sourcePage || q.sourceText) && (
+                    {(q.sourcePage || q.sourceContext || q.sourceText) && (
                       <div className="space-y-2 text-xs text-slate-400">
                         {(q.documentTitle || q.chapterTitle) && (
                           <div className="flex flex-wrap items-center gap-2">
@@ -249,32 +251,15 @@ export default function ResultPage() {
                             <span>Trang {q.sourcePage}</span>
                           </div>
                         )}
-                        {q.sourceText && (
-                          <p className="text-slate-500 italic leading-relaxed vn-text">
-                            &ldquo;{q.sourceText}&rdquo;
+                        {q.sourceContext ? (
+                          <p className="text-slate-500 leading-relaxed vn-text">
+                            {q.sourceContext}
                           </p>
-                        )}
-                        {q.sourceContext && q.sourceContext !== q.sourceText && (
-                          <div className="space-y-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedContext((prev) => ({
-                                  ...prev,
-                                  [q.questionId]: !prev[q.questionId],
-                                }))
-                              }
-                              className="text-xs font-medium text-primary-600 hover:text-primary-700 cursor-pointer"
-                            >
-                              {expandedContext[q.questionId] ? 'Ẩn ngữ cảnh mở rộng' : 'Xem thêm ngữ cảnh'}
-                            </button>
-                            {expandedContext[q.questionId] && (
-                              <p className="text-slate-500 leading-relaxed vn-text">
-                                {q.sourceContext}
-                              </p>
-                            )}
-                          </div>
-                        )}
+                        ) : q.sourceText ? (
+                          <p className="text-slate-500 leading-relaxed vn-text">
+                            {q.sourceText}
+                          </p>
+                        ) : null}
                         {buildCitationHref(q) && (
                           <Link to={buildCitationHref(q)} className="inline-block pt-1">
                             <Button size="sm" variant="outline">

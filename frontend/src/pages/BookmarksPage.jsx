@@ -12,6 +12,7 @@ import {
   BookOpen,
   HelpCircle,
   ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,10 @@ function buildQuestionHref(item) {
 function buildDocumentHref(item) {
   if (!item?.documentId) return null
   const params = new URLSearchParams()
-  if (item.chapterId) params.set('focusChapterId', String(item.chapterId))
+  if (item.chapterId) {
+    params.set('focusChapterId', String(item.chapterId))
+    params.set('openChapterId', String(item.chapterId))
+  }
   return `/document/${item.documentId}${params.toString() ? `?${params.toString()}` : ''}`
 }
 
@@ -85,6 +89,23 @@ export default function BookmarksPage() {
   const pageBookmarks = bookmarks.filter(
     (bm) => bm.questionId == null && bm.pageNumber != null,
   )
+
+  const ITEMS_PER_PAGE = 5
+
+  const [pageQ, setPageQ] = useState(1)
+  const totalPagesQ = Math.ceil(questionBookmarks.length / ITEMS_PER_PAGE)
+  const actualPageQ = pageQ > 1 && pageQ > totalPagesQ ? Math.max(1, totalPagesQ) : pageQ
+  const paginatedQ = questionBookmarks.slice((actualPageQ - 1) * ITEMS_PER_PAGE, actualPageQ * ITEMS_PER_PAGE)
+
+  const [pageP, setPageP] = useState(1)
+  const totalPagesP = Math.ceil(pageBookmarks.length / ITEMS_PER_PAGE)
+  const actualPageP = pageP > 1 && pageP > totalPagesP ? Math.max(1, totalPagesP) : pageP
+  const paginatedP = pageBookmarks.slice((actualPageP - 1) * ITEMS_PER_PAGE, actualPageP * ITEMS_PER_PAGE)
+
+  const [pageN, setPageN] = useState(1)
+  const totalPagesN = Math.ceil(notes.length / ITEMS_PER_PAGE)
+  const actualPageN = pageN > 1 && pageN > totalPagesN ? Math.max(1, totalPagesN) : pageN
+  const paginatedN = notes.slice((actualPageN - 1) * ITEMS_PER_PAGE, actualPageN * ITEMS_PER_PAGE)
 
   const startEdit = (note) => {
     setEditingNote(note.id)
@@ -144,7 +165,7 @@ export default function BookmarksPage() {
 
         <TabsContent value="questions">
           <motion.div variants={itemAnim} className="space-y-2">
-            {questionBookmarks.map((bm) => (
+            {paginatedQ.map((bm) => (
               <Card key={bm.id} className="p-4 group">
                 <CardContent className="flex items-start gap-4">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 shrink-0 mt-0.5">
@@ -193,12 +214,27 @@ export default function BookmarksPage() {
                 Chưa có câu hỏi nào được đánh dấu.
               </p>
             )}
+            {totalPagesQ > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  Trang {actualPageQ} / {totalPagesQ} ({(actualPageQ - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPageQ * ITEMS_PER_PAGE, questionBookmarks.length)} / {questionBookmarks.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPageQ(Math.max(1, actualPageQ - 1))} disabled={actualPageQ <= 1}>
+                    <ChevronLeft className="h-4 w-4" /> Trước
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPageQ(Math.min(totalPagesQ, actualPageQ + 1))} disabled={actualPageQ >= totalPagesQ}>
+                    Sau <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </TabsContent>
 
         <TabsContent value="pages">
           <motion.div variants={itemAnim} className="space-y-2">
-            {pageBookmarks.map((bm) => (
+            {paginatedP.map((bm) => (
               <Card key={bm.id} className="p-4 group">
                 <CardContent className="flex items-center gap-4">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 shrink-0">
@@ -241,12 +277,27 @@ export default function BookmarksPage() {
                 Chưa có trang nào được đánh dấu.
               </p>
             )}
+            {totalPagesP > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  Trang {actualPageP} / {totalPagesP} ({(actualPageP - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPageP * ITEMS_PER_PAGE, pageBookmarks.length)} / {pageBookmarks.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPageP(Math.max(1, actualPageP - 1))} disabled={actualPageP <= 1}>
+                    <ChevronLeft className="h-4 w-4" /> Trước
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPageP(Math.min(totalPagesP, actualPageP + 1))} disabled={actualPageP >= totalPagesP}>
+                    Sau <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </TabsContent>
 
         <TabsContent value="notes">
           <motion.div variants={itemAnim} className="space-y-2">
-            {notes.map((note) => (
+            {paginatedN.map((note) => (
               <Card key={note.id} className="p-4 group">
                 <CardContent>
                   <div className="flex items-start gap-4">
@@ -257,6 +308,8 @@ export default function BookmarksPage() {
                       {editingNote === note.id ? (
                         <div className="space-y-2">
                           <textarea
+                            id={`note-edit-${note.id}`}
+                            name="noteContent"
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
                             rows={3}
@@ -326,6 +379,21 @@ export default function BookmarksPage() {
               <p className="text-center text-sm text-slate-400 py-10">
                 Chưa có ghi chú nào.
               </p>
+            )}
+            {totalPagesN > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  Trang {actualPageN} / {totalPagesN} ({(actualPageN - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPageN * ITEMS_PER_PAGE, notes.length)} / {notes.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPageN(Math.max(1, actualPageN - 1))} disabled={actualPageN <= 1}>
+                    <ChevronLeft className="h-4 w-4" /> Trước
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPageN(Math.min(totalPagesN, actualPageN + 1))} disabled={actualPageN >= totalPagesN}>
+                    Sau <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </motion.div>
         </TabsContent>

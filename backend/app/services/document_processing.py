@@ -112,6 +112,18 @@ def extract_text(file_type: FileType, content: bytes) -> str:
     return ""
 
 
+def extract_pages(file_type: FileType, content: bytes) -> list[str]:
+    return _extract_pages(file_type, content)
+
+
+def extract_pages_from_path(file_type: FileType, file_path: str) -> list[str]:
+    try:
+        content = Path(file_path).read_bytes()
+    except OSError:
+        return []
+    return extract_pages(file_type, content)
+
+
 def _parse_document_fallback(
     file_type: FileType, content: bytes, title: str, pages: list[str] | None = None
 ) -> list[dict]:

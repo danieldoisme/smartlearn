@@ -93,7 +93,10 @@ function clearSnapshot(sessionType, chapterId) {
 function buildCitationHref(question) {
   if (!question?.documentId) return null
   const params = new URLSearchParams()
-  if (question.chapterId) params.set('focusChapterId', String(question.chapterId))
+  if (question.chapterId) {
+    params.set('focusChapterId', String(question.chapterId))
+    params.set('openChapterId', String(question.chapterId))
+  }
   return `/document/${question.documentId}${params.toString() ? `?${params.toString()}` : ''}`
 }
 
@@ -119,10 +122,10 @@ export default function StudyPage() {
   const [submitted, setSubmitted] = useState(false)
   const [serverResult, setServerResult] = useState(null)
   const [showSource, setShowSource] = useState(false)
-  const [showSourceContext, setShowSourceContext] = useState(false)
   const [noteContent, setNoteContent] = useState('')
   const [noteMessage, setNoteMessage] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
 
   const { data: availableChapters = [], isLoading: availableLoading } =
     useAvailableStudyChapters()
@@ -186,6 +189,15 @@ export default function StudyPage() {
     if (statusFilter === 'all') return availableChapters
     return availableChapters.filter((chapter) => getChapterStatus(chapter) === statusFilter)
   }, [availableChapters, statusFilter])
+
+  const ITEMS_PER_PAGE = 5
+  const totalPages = Math.ceil(filteredChapters.length / ITEMS_PER_PAGE)
+  const actualPage = page > 1 && page > totalPages ? Math.max(1, totalPages) : page
+
+  const paginatedChapters = useMemo(() => {
+    return filteredChapters.slice((actualPage - 1) * ITEMS_PER_PAGE, actualPage * ITEMS_PER_PAGE)
+  }, [filteredChapters, actualPage])
+
   const currentBookmark = question
     ? bookmarks.find((bookmark) => bookmark.questionId === question.id)
     : null
@@ -269,7 +281,10 @@ export default function StudyPage() {
                 <button
                   key={filter.value}
                   type="button"
-                  onClick={() => setStatusFilter(filter.value)}
+                  onClick={() => {
+                    setStatusFilter(filter.value)
+                    setPage(1)
+                  }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                     statusFilter === filter.value
                       ? 'bg-primary-50 text-primary-700 border border-primary-200'
@@ -293,48 +308,79 @@ export default function StudyPage() {
                       Thử đổi bộ lọc để xem thêm chương khả dụng.
                     </p>
                   </div>
-                  <Button variant="outline" onClick={() => setStatusFilter('all')}>
+                  <Button variant="outline" onClick={() => { setStatusFilter('all'); setPage(1); }}>
                     Xem tất cả chương
                   </Button>
                 </CardContent>
               </Card>
-            ) : filteredChapters.map((chapter) => {
-              const statusMeta = getChapterStatusMeta(chapter)
-              return (
-              <Card key={chapter.chapterId} className="p-4">
-                <CardContent className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
-                    <BookOpen className="h-5 w-5 text-primary-600" />
+            ) : (
+              <>
+                {paginatedChapters.map((chapter) => {
+                  const statusMeta = getChapterStatusMeta(chapter)
+                  return (
+                    <Card key={chapter.chapterId} className="p-4">
+                      <CardContent className="flex items-center gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+                          <BookOpen className="h-5 w-5 text-primary-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              {chapter.chapterTitle}
+                            </p>
+                            <Badge variant="secondary">{chapter.documentTitle}</Badge>
+                            <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span>{chapter.questionCount} câu hỏi</span>
+                            <span>
+                              {chapter.answeredCount}/{chapter.questionCount} đã làm
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Progress value={chapter.progress} className="flex-1 h-1.5" />
+                            <span className="text-xs text-slate-500">
+                              {chapter.progress}%
+                            </span>
+                          </div>
+                        </div>
+                        <Button onClick={() => navigate(`/study?chapterId=${chapter.chapterId}`)}>
+                          {chapter.answeredCount > 0 ? 'Tiếp tục học' : 'Bắt đầu học'}
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs text-slate-500 font-medium">
+                      Trang {actualPage} / {totalPages} ({(actualPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPage * ITEMS_PER_PAGE, filteredChapters.length)} trong tổng số {filteredChapters.length} chương)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(Math.max(1, actualPage - 1))}
+                        disabled={actualPage <= 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Trước
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(Math.min(totalPages, actualPage + 1))}
+                        disabled={actualPage >= totalPages}
+                      >
+                        Sau
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-semibold text-slate-800 truncate">
-                        {chapter.chapterTitle}
-                      </p>
-                      <Badge variant="secondary">{chapter.documentTitle}</Badge>
-                      <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span>{chapter.questionCount} câu hỏi</span>
-                      <span>
-                        {chapter.answeredCount}/{chapter.questionCount} đã làm
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Progress value={chapter.progress} className="flex-1 h-1.5" />
-                      <span className="text-xs text-slate-500">
-                        {chapter.progress}%
-                      </span>
-                    </div>
-                  </div>
-                  <Button onClick={() => navigate(`/study?chapterId=${chapter.chapterId}`)}>
-                    {chapter.answeredCount > 0 ? 'Tiếp tục học' : 'Bắt đầu học'}
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-              )
-            })}
+                )}
+              </>
+            )}
           </div>
         )}
       </motion.div>
@@ -423,7 +469,6 @@ export default function StudyPage() {
   const resetForNext = () => {
     setSubmitted(false)
     setShowSource(false)
-    setShowSourceContext(false)
     setFillAnswer('')
     setServerResult(null)
     setNoteContent('')
@@ -553,14 +598,24 @@ export default function StudyPage() {
                           : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
                     }`}
                   >
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-all ${
+                      question.questionType === QuestionType.MULTI
+                        ? 'rounded-md'
+                        : 'rounded-full'
+                    } ${
                       submitted
                         ? correct
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : isSelected ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'
-                        : isSelected ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-400'
+                          ? 'border-emerald-500 bg-emerald-100 text-emerald-700'
+                          : isSelected
+                            ? 'border-red-500 bg-red-100 text-red-700'
+                            : 'border-slate-300 bg-white text-transparent'
+                        : isSelected
+                          ? 'border-primary-500 bg-primary-100 text-primary-700'
+                          : 'border-slate-300 bg-white text-transparent'
                     }`}>
-                      {opt.label}
+                      <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${isSelected || (submitted && correct) ? '' : 'opacity-0'}`}>
+                        {question.questionType === QuestionType.MULTI ? '✓' : ''}
+                      </span>
                     </span>
                     <span className="flex-1 vn-text">{opt.content}</span>
                     {submitted && correct && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
@@ -612,7 +667,7 @@ export default function StudyPage() {
         </CardContent>
       </Card>
 
-      {submitted && (question.sourcePage || question.sourceText) && (
+      {submitted && (question.sourcePage || question.sourceContext || question.sourceText) && (
         <AnimatePresence>
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
             <button
@@ -620,7 +675,7 @@ export default function StudyPage() {
               className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 mb-2 cursor-pointer"
             >
               <Lightbulb className="h-4 w-4" />
-              {showSource ? 'Ẩn nguồn trích dẫn' : 'Xem nguồn trích dẫn'}
+              {showSource ? 'Ẩn trích dẫn' : 'Xem trích dẫn'}
             </button>
             {showSource && (
               <Card className="p-4">
@@ -631,31 +686,19 @@ export default function StudyPage() {
                       <span className="text-xs text-slate-500">Trang {question.sourcePage}</span>
                     </div>
                   )}
-                  {question.sourceText && (
-                    <p className="text-sm text-slate-600 leading-relaxed vn-text italic">
-                      &ldquo;{question.sourceText}&rdquo;
+                  {question.sourceContext ? (
+                    <p className="text-sm text-slate-600 leading-relaxed vn-text">
+                      {question.sourceContext}
                     </p>
-                  )}
+                  ) : question.sourceText ? (
+                    <p className="text-sm text-slate-600 leading-relaxed vn-text">
+                      {question.sourceText}
+                    </p>
+                  ) : null}
                   {(question.documentTitle || question.chapterTitle) && (
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                       {question.documentTitle && <Badge variant="secondary">{question.documentTitle}</Badge>}
                       {question.chapterTitle && <span>Chương: {question.chapterTitle}</span>}
-                    </div>
-                  )}
-                  {question.sourceContext && question.sourceContext !== question.sourceText && (
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowSourceContext((prev) => !prev)}
-                        className="text-xs font-medium text-primary-600 hover:text-primary-700 cursor-pointer"
-                      >
-                        {showSourceContext ? 'Ẩn ngữ cảnh mở rộng' : 'Xem thêm ngữ cảnh'}
-                      </button>
-                      {showSourceContext && (
-                        <p className="text-sm text-slate-500 leading-relaxed vn-text">
-                          {question.sourceContext}
-                        </p>
-                      )}
                     </div>
                   )}
                   {citationHref && (

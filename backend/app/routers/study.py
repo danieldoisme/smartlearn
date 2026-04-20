@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.app.core.deps import get_current_user, get_db
 from backend.app.models.content import Chapter, Document
-from backend.app.models.enums import QuestionType
+from backend.app.models.enums import QuestionType, SessionType
 from backend.app.models.quiz import (
     Question,
     StudySession,
@@ -86,6 +86,17 @@ def _build_source_context(
     if end < len(content):
         snippet = f"{snippet}…"
     return snippet
+
+
+def _pick_session_questions(
+    q_rows: list[Question], answered_ids: set[int], limit: int
+) -> list[Question]:
+    if limit <= 0:
+        return []
+    unanswered = [q for q in q_rows if q.id not in answered_ids]
+    if unanswered:
+        return unanswered[:limit]
+    return q_rows[:limit]
 
 
 async def _own_chapter(db: AsyncSession, chapter_id: int, user_id: int) -> Chapter:
@@ -253,12 +264,28 @@ async def start_session(
                     )
                     .where(Question.chapter_id == payload.chapter_id)
                     .order_by(Question.id)
-                    .limit(limit)
                 )
             )
             .scalars()
             .all()
         )
+
+        if payload.session_type == SessionType.LEARN:
+            answered_ids = {
+                row[0]
+                for row in (
+                    await db.execute(
+                        select(UserAnswer.question_id)
+                        .join(Question, Question.id == UserAnswer.question_id)
+                        .where(UserAnswer.user_id == current.id)
+                        .where(Question.chapter_id == payload.chapter_id)
+                        .group_by(UserAnswer.question_id)
+                    )
+                ).all()
+            }
+            q_rows = _pick_session_questions(q_rows, answered_ids, limit)
+        else:
+            q_rows = q_rows[:limit]
 
     if not q_rows:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Chương này chưa có câu hỏi")

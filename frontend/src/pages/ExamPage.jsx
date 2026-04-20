@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -104,6 +104,7 @@ export default function ExamPage() {
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [configError, setConfigError] = useState('')
   const [partialPool, setPartialPool] = useState(null)
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState([])
 
   const { data: availableChapters = [], isLoading: chaptersLoading } =
     useAvailableStudyChapters()
@@ -169,6 +170,61 @@ export default function ExamPage() {
   const answeredCount = Object.values(answers).filter(Boolean).length
   const isLowTime = timeLeft < 300
 
+  const chapterGroups = useMemo(() => {
+    const groups = new Map()
+    for (const chapter of availableChapters) {
+      const key = chapter.documentId
+      if (!groups.has(key)) {
+        groups.set(key, {
+          documentId: chapter.documentId,
+          documentTitle: chapter.documentTitle,
+          chapters: [],
+          questionCount: 0,
+        })
+      }
+      const group = groups.get(key)
+      group.chapters.push(chapter)
+      group.questionCount += chapter.questionCount || 0
+    }
+    return [...groups.values()]
+  }, [availableChapters])
+
+  const [prevPresetChapterId, setPrevPresetChapterId] = useState(null)
+  if (presetChapterId !== prevPresetChapterId && availableChapters.length > 0) {
+    setPrevPresetChapterId(presetChapterId)
+    const presetChapter = availableChapters.find((chapter) => chapter.chapterId === presetChapterId)
+    if (presetChapter && !selectedDocumentIds.includes(presetChapter.documentId)) {
+      setSelectedDocumentIds([...selectedDocumentIds, presetChapter.documentId])
+    }
+  }
+
+  const visibleChapterGroups = useMemo(() => {
+    if (selectedDocumentIds.length === 0) return []
+    return chapterGroups.filter((group) => selectedDocumentIds.includes(group.documentId))
+  }, [chapterGroups, selectedDocumentIds])
+
+  const availableDocumentOptions = useMemo(() => (
+    chapterGroups.filter((group) => !selectedDocumentIds.includes(group.documentId))
+  ), [chapterGroups, selectedDocumentIds])
+
+  const addDocument = (documentId) => {
+    if (!documentId) return
+    setSelectedDocumentIds((prev) => (
+      prev.includes(documentId) ? prev : [...prev, documentId]
+    ))
+  }
+
+  const removeDocument = (documentId) => {
+    setSelectedDocumentIds((prev) => prev.filter((id) => id !== documentId))
+    setConfig((current) => ({
+      ...current,
+      selectedChapterIds: current.selectedChapterIds.filter((chapterId) => {
+        const chapter = availableChapters.find((item) => item.chapterId === chapterId)
+        return chapter?.documentId !== documentId
+      }),
+    }))
+  }
+
   const toggleChapter = (chapterId) => {
     setConfig((prev) => ({
       ...prev,
@@ -181,8 +237,16 @@ export default function ExamPage() {
   const startExam = async (allowPartial = false) => {
     setConfigError('')
     try {
+      const effectiveChapterIds = config.selectedChapterIds.length
+        ? config.selectedChapterIds
+        : selectedDocumentIds.length
+          ? availableChapters
+              .filter((chapter) => selectedDocumentIds.includes(chapter.documentId))
+              .map((chapter) => chapter.chapterId)
+          : []
+
       const data = await startMut.mutateAsync({
-        chapterIds: config.selectedChapterIds,
+        chapterIds: effectiveChapterIds,
         questionLimit: config.questionLimit,
         timeLimitMinutes: config.timeLimitMinutes,
         questionType: config.questionType === 'mixed' ? null : config.questionType,
@@ -259,12 +323,18 @@ export default function ExamPage() {
                 : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
             }`}
           >
-            <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold shrink-0 ${
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center border-2 transition-all ${
+              question.questionType === QuestionType.MULTI
+                ? 'rounded-md'
+                : 'rounded-full'
+            } ${
               selectedLabels.includes(opt.label)
-                ? 'bg-primary-100 text-primary-700'
-                : 'bg-slate-100 text-slate-400'
+                ? 'border-primary-500 bg-primary-100 text-primary-700'
+                : 'border-slate-300 bg-white text-transparent'
             }`}>
-              {opt.label}
+              <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${selectedLabels.includes(opt.label) ? '' : 'opacity-0'}`}>
+                {question.questionType === QuestionType.MULTI ? '✓' : ''}
+              </span>
             </span>
             <span className="vn-text">{opt.content}</span>
           </button>
@@ -296,37 +366,132 @@ export default function ExamPage() {
 
         <Card className="p-6">
           <CardContent className="space-y-6">
-            <div>
-              <div id="chapters-label" className="block text-sm font-medium text-slate-800 mb-2">
-                Chương tham gia đề thi
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div id="documents-label" className="block text-sm font-medium text-slate-800">
+                  Tài liệu tham gia đề thi
+                </div>
+                <span className="text-xs text-slate-500">
+                  {selectedDocumentIds.length === 0
+                    ? 'Đang dùng toàn bộ tài liệu'
+                    : `${selectedDocumentIds.length} tài liệu đã chọn`}
+                </span>
               </div>
-              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="chapters-label">
-                <button
-                  type="button"
-                  onClick={() => setConfig((prev) => ({ ...prev, selectedChapterIds: [] }))}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                    config.selectedChapterIds.length === 0
-                      ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                      : 'text-slate-500 border border-slate-200 hover:border-slate-300'
-                  }`}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDocumentIds([])
+                  setConfig((prev) => ({ ...prev, selectedChapterIds: [] }))
+                }}
+                className={`w-full rounded-xl border px-4 py-3 text-left transition-all cursor-pointer ${
+                  selectedDocumentIds.length === 0
+                    ? 'bg-primary-50 text-primary-700 border-primary-200'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Toàn bộ tài liệu</p>
+                    <p className="text-xs text-slate-500">Không cần chọn riêng từng tài liệu hoặc chương</p>
+                  </div>
+                  <Badge variant={selectedDocumentIds.length === 0 ? 'default' : 'secondary'}>
+                    {chapterGroups.length} tài liệu
+                  </Badge>
+                </div>
+              </button>
+
+              {selectedDocumentIds.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {visibleChapterGroups.map((group) => (
+                    <button
+                      key={group.documentId}
+                      type="button"
+                      onClick={() => removeDocument(group.documentId)}
+                      className="rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition-all cursor-pointer hover:border-primary-300"
+                    >
+                      {group.documentTitle} · {group.chapters.length} chương ✕
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label htmlFor="exam-document-picker" className="block text-xs font-medium text-slate-600">
+                  Thêm tài liệu vào đề thi
+                </label>
+                <select
+                  id="exam-document-picker"
+                  name="examDocumentPicker"
+                  defaultValue=""
+                  onChange={(e) => {
+                    addDocument(Number(e.target.value))
+                    e.target.value = ''
+                  }}
+                  disabled={selectedDocumentIds.length === 0 ? false : availableDocumentOptions.length === 0}
+                  className="glass-input h-11 w-full rounded-xl px-4 text-sm text-slate-800"
                 >
-                  Toàn bộ
-                </button>
-                {availableChapters.map((chapter) => (
-                  <button
-                    key={chapter.chapterId}
-                    type="button"
-                    onClick={() => toggleChapter(chapter.chapterId)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
-                      config.selectedChapterIds.includes(chapter.chapterId)
-                        ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                        : 'text-slate-500 border border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    {chapter.chapterTitle}
-                  </button>
-                ))}
+                  <option value="">{selectedDocumentIds.length === 0 ? 'Chọn tài liệu để giới hạn phạm vi (tuỳ chọn)' : availableDocumentOptions.length ? 'Thêm tài liệu...' : 'Đã thêm hết tài liệu'}</option>
+                  {availableDocumentOptions.map((group) => (
+                    <option key={group.documentId} value={group.documentId}>
+                      {group.documentTitle} — {group.chapters.length} chương / {group.questionCount} câu hỏi
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500">
+                  Không chọn tài liệu nào = dùng toàn bộ. Chọn ít nhất 1 tài liệu để hiện danh sách chương tương ứng.
+                </p>
               </div>
+
+              {selectedDocumentIds.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div id="chapters-label" className="block text-sm font-medium text-slate-800">
+                      Chương tham gia đề thi
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {config.selectedChapterIds.length === 0
+                        ? 'Mặc định lấy toàn bộ chương của tài liệu đã chọn'
+                        : `${config.selectedChapterIds.length} chương đã chọn`}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3" role="group" aria-labelledby="chapters-label">
+                    {visibleChapterGroups.map((group) => (
+                      <Card key={group.documentId} className="p-4">
+                        <CardContent className="space-y-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{group.documentTitle}</p>
+                            <p className="text-xs text-slate-500">
+                              Chọn chương cụ thể hoặc để trống để lấy toàn bộ chương trong tài liệu này.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {group.chapters.map((chapter) => (
+                              <button
+                                key={chapter.chapterId}
+                                type="button"
+                                onClick={() => toggleChapter(chapter.chapterId)}
+                                className={`rounded-lg border px-3 py-2 text-left text-xs transition-all cursor-pointer ${
+                                  config.selectedChapterIds.includes(chapter.chapterId)
+                                    ? 'bg-primary-50 text-primary-700 border-primary-200'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="font-medium">{chapter.chapterTitle}</div>
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  {chapter.questionCount} câu hỏi
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

@@ -20,7 +20,12 @@ class QuestionGenerationIn(CamelModel):
 
 class QuestionGenerationOut(CamelModel):
     chapter_id: int
+    requested_count: int
     created_count: int
+    skipped_count: int = 0
+    warnings: List[str] = Field(default_factory=list)
+    provider: str = "fallback"
+    used_fallback: bool = False
 
 
 class QuestionOut(CamelModel):

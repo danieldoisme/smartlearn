@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.app.core.deps import get_current_user, get_db
 from backend.app.models.content import Chapter, Document, Topic
@@ -22,7 +23,11 @@ from backend.app.services.document_processing import (
     parse_document,
     store_uploaded_file,
 )
-from backend.app.services.question_generation import build_questions
+from backend.app.services.question_generation import (
+    filter_existing_questions,
+    generate_questions_for_chapter,
+    question_signature,
+)
 from backend.app.models.user import User
 from backend.app.schemas.document import (
     ChapterWithStats,
@@ -186,7 +191,7 @@ async def preview_document(
     preview_sections = [
         DocumentPreviewSection(
             title=(section.get("title") or f"Phần {index}")[:255],
-            content_text=(section.get("content_text") or "")[:400],
+            content_text=section.get("content_text") or "",
             page_start=section.get("page_start"),
             page_end=section.get("page_end"),
             content_chars=len(section.get("content_text") or ""),
@@ -678,6 +683,7 @@ async def generate_questions(
     chapter = (
         await db.execute(
             select(Chapter)
+            .options(selectinload(Chapter.document))
             .join(Document, Document.id == Chapter.document_id)
             .where(Chapter.id == chapter_id)
             .where(Document.user_id == current.id)
@@ -686,29 +692,65 @@ async def generate_questions(
     if chapter is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Chapter not found")
 
-    generated = build_questions(
-        chapter.title, chapter.content_text, payload.question_type, payload.count
+    generation = await generate_questions_for_chapter(
+        chapter_title=chapter.title,
+        content_text=chapter.content_text,
+        question_type=payload.question_type,
+        count=payload.count,
+        document_file_path=chapter.document.file_path
+        if chapter.document is not None
+        else None,
+        document_file_type=chapter.document.file_type
+        if chapter.document is not None
+        else None,
+        page_start=chapter.page_start,
+        page_end=chapter.page_end,
     )
-    if not generated:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Không đủ nội dung để tạo câu hỏi cho chương này",
+    if not generation.items:
+        detail = (
+            generation.warnings[0]
+            if generation.warnings
+            else "Không đủ nội dung để tạo câu hỏi cho chương này"
         )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail)
+
+    existing_rows = (
+        await db.execute(
+            select(
+                Question.question_type,
+                Question.content,
+                Question.source_text,
+                Question.correct_answer,
+            ).where(Question.chapter_id == chapter.id)
+        )
+    ).all()
+    existing_signatures = {
+        question_signature(
+            question_type=row[0],
+            content=row[1],
+            source_text=row[2],
+            correct_answer=row[3],
+        )
+        for row in existing_rows
+    }
+    new_items, duplicate_skips = filter_existing_questions(
+        generation.items, existing_signatures
+    )
 
     created_count = 0
-    for item in generated:
+    for item in new_items:
         question = Question(
             chapter_id=chapter.id,
-            question_type=item["question_type"],
-            content=item["content"],
-            correct_answer=item["correct_answer"],
-            source_text=item["source_text"],
-            source_page=chapter.page_start,
+            question_type=item.question_type,
+            content=item.content,
+            correct_answer=item.correct_answer,
+            source_text=item.source_text,
+            source_page=item.source_page,
         )
         db.add(question)
         await db.flush()
 
-        for option in item["options"]:
+        for option in item.options:
             db.add(
                 QuestionOption(
                     question_id=question.id,
@@ -720,4 +762,24 @@ async def generate_questions(
         created_count += 1
 
     await db.commit()
-    return QuestionGenerationOut(chapter_id=chapter.id, created_count=created_count)
+
+    warnings = list(generation.warnings)
+    skipped_count = max(generation.requested_count - created_count, 0)
+    if duplicate_skips:
+        warnings.append(
+            f"Bỏ qua {duplicate_skips} câu trùng với dữ liệu đã có trong chương."
+        )
+    if created_count == 0 and duplicate_skips:
+        warnings.append(
+            "Không có câu hỏi mới nào được thêm vào vì tất cả kết quả đều trùng."
+        )
+
+    return QuestionGenerationOut(
+        chapter_id=chapter.id,
+        requested_count=generation.requested_count,
+        created_count=created_count,
+        skipped_count=skipped_count,
+        warnings=warnings,
+        provider=generation.provider,
+        used_fallback=generation.used_fallback,
+    )

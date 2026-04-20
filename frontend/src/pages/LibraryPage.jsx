@@ -71,6 +71,7 @@ export default function LibraryPage() {
   const [createTopicDialogOpen, setCreateTopicDialogOpen] = useState(false)
   const [newTopic, setNewTopic] = useState('')
   const [createTopicError, setCreateTopicError] = useState('')
+  const [page, setPage] = useState(1)
 
   const { data: topics = [] } = useTopics()
   const { data: documents = [], isLoading } = useDocuments(activeTopicId)
@@ -88,6 +89,14 @@ export default function LibraryPage() {
       return title.includes(q) || topic.includes(q)
     })
   }, [documents, search])
+
+  const ITEMS_PER_PAGE = 6
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
+  const actualPage = page > 1 && page > totalPages ? Math.max(1, totalPages) : page
+
+  const paginated = useMemo(() => {
+    return filtered.slice((actualPage - 1) * ITEMS_PER_PAGE, actualPage * ITEMS_PER_PAGE)
+  }, [filtered, actualPage])
 
   const openEditDialog = (doc) => {
     setEditDoc(doc)
@@ -120,7 +129,7 @@ export default function LibraryPage() {
             aria-label="Tìm kiếm tài liệu"
             placeholder="Tìm kiếm tài liệu..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-10"
           />
         </div>
@@ -144,7 +153,7 @@ export default function LibraryPage() {
 
       <motion.div variants={item} className="flex gap-2 flex-wrap">
         <button
-          onClick={() => setActiveTopicId(null)}
+          onClick={() => { setActiveTopicId(null); setPage(1); }}
           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
             activeTopicId === null
               ? 'bg-primary-50 text-primary-700 border border-primary-200'
@@ -156,7 +165,7 @@ export default function LibraryPage() {
         {topics.map((t) => (
           <div key={t.id} className="relative group inline-flex">
             <button
-              onClick={() => setActiveTopicId(t.id)}
+              onClick={() => { setActiveTopicId(t.id); setPage(1); }}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer truncate max-w-[200px] ${
                 activeTopicId === t.id
                   ? 'bg-primary-50 text-primary-700 border border-primary-200 pr-8'
@@ -189,7 +198,7 @@ export default function LibraryPage() {
 
       {viewMode === 'grid' ? (
         <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((doc) => (
+          {paginated.map((doc) => (
             <Card key={doc.id} className={`p-5 group relative ${menuOpen === doc.id ? 'z-50' : ''}`}>
               <CardContent>
                 <div className="flex items-start justify-between mb-3">
@@ -252,7 +261,7 @@ export default function LibraryPage() {
         </motion.div>
       ) : (
         <motion.div variants={item} className="space-y-2">
-          {filtered.map((doc) => (
+          {paginated.map((doc) => (
             <Card key={doc.id} className={`p-4 ${menuOpen === doc.id ? 'relative z-50' : ''}`}>
               <CardContent className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
@@ -300,6 +309,32 @@ export default function LibraryPage() {
             </Card>
           ))}
         </motion.div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-slate-500 font-medium">
+            Trang {actualPage} / {totalPages} ({(actualPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPage * ITEMS_PER_PAGE, filtered.length)} trong tổng số {filtered.length} tài liệu)
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.max(1, actualPage - 1))}
+              disabled={actualPage <= 1}
+            >
+              Cũ hơn
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages, actualPage + 1))}
+              disabled={actualPage >= totalPages}
+            >
+              Tiếp
+            </Button>
+          </div>
+        </div>
       )}
 
       {!isLoading && filtered.length === 0 && (

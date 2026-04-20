@@ -11,6 +11,8 @@ import {
   Play,
   Plus,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -82,6 +84,10 @@ export default function DocumentDetailPage() {
     const raw = searchParams.get('focusChapterId')
     return raw ? Number(raw) : null
   }, [searchParams])
+  const openChapterId = useMemo(() => {
+    const raw = searchParams.get('openChapterId')
+    return raw ? Number(raw) : null
+  }, [searchParams])
   const { data: doc, isLoading, isError } = useDocumentDetail(docId)
   const generateQuestions = useGenerateQuestions(docId)
   const updateStructure = useUpdateDocumentStructure(docId)
@@ -92,22 +98,54 @@ export default function DocumentDetailPage() {
   const [genConfig, setGenConfig] = useState({ type: 'mixed', count: 10 })
   const [generateMessage, setGenerateMessage] = useState('')
   const [structureDraft, setStructureDraft] = useState([])
+  const [viewerChapterId, setViewerChapterId] = useState(null)
   const chapters = useMemo(() => doc?.chapters || [], [doc])
+  const viewerChapter = useMemo(
+    () => chapters.find((chapter) => chapter.id === viewerChapterId) || null,
+    [chapters, viewerChapterId],
+  )
   const totalAnswered = doc?.totalAnswered ?? 0
   const totalQuestions = doc?.totalQuestions ?? 0
   const overallProgress =
     totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0
   const canEditStructure = totalQuestions === 0
 
+  const ITEMS_PER_PAGE = 5
+  const [page, setPage] = useState(1)
+  const [hasFocusedTargetPage, setHasFocusedTargetPage] = useState(false)
+
+  if (focusChapterId && chapters.length > 0 && !hasFocusedTargetPage) {
+    setHasFocusedTargetPage(true)
+    const idx = chapters.findIndex((c) => c.id === focusChapterId)
+    if (idx !== -1) {
+      setPage(Math.floor(idx / ITEMS_PER_PAGE) + 1)
+    }
+  }
+
+  const totalPages = Math.ceil(chapters.length / ITEMS_PER_PAGE)
+  const actualPage = page > 1 && page > totalPages ? Math.max(1, totalPages) : page
+
+  const paginatedChapters = useMemo(() => {
+    return chapters.slice((actualPage - 1) * ITEMS_PER_PAGE, actualPage * ITEMS_PER_PAGE)
+  }, [chapters, actualPage])
+
   useEffect(() => {
-    if (!focusChapterId || !chapters.length) return
+    if (!focusChapterId || !paginatedChapters.length) return
     const target = document.getElementById(`chapter-${focusChapterId}`)
     if (!target) return
     const timer = window.setTimeout(() => {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 120)
     return () => window.clearTimeout(timer)
-  }, [focusChapterId, chapters])
+  }, [focusChapterId, paginatedChapters])
+
+  const [prevOpenChapterId, setPrevOpenChapterId] = useState(null)
+  if (openChapterId !== prevOpenChapterId && chapters.length > 0) {
+    setPrevOpenChapterId(openChapterId)
+    if (chapters.some((chapter) => chapter.id === openChapterId)) {
+      setViewerChapterId(openChapterId)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -137,7 +175,22 @@ export default function DocumentDetailPage() {
         questionType: genConfig.type,
         count: genConfig.count,
       })
-      setGenerateMessage(`Đã tạo ${result.createdCount} câu hỏi.`)
+      const messageLines = [
+        `Đã tạo ${result.createdCount}/${result.requestedCount} câu hỏi mới.`,
+      ]
+      if (result.skippedCount > 0) {
+        messageLines.push(`Đã bỏ qua ${result.skippedCount} câu hỏi do trùng lặp hoặc không hợp lệ.`)
+      }
+      if (result.usedFallback) {
+        messageLines.push('Một phần kết quả dùng fallback cục bộ để bảo đảm hoàn tất.')
+      }
+      if (result.provider) {
+        messageLines.push(`Nguồn sinh câu hỏi: ${result.provider}.`)
+      }
+      if (result.warnings?.length) {
+        messageLines.push('', ...result.warnings.map((warning) => `• ${warning}`))
+      }
+      setGenerateMessage(messageLines.join('\n'))
       setShowGenerate(false)
     } catch (err) {
       setGenerateMessage(getErrorMessage(err, 'Không thể tạo câu hỏi cho chương này.'))
@@ -302,7 +355,7 @@ export default function DocumentDetailPage() {
         </div>
 
         {generateMessage && (
-          <div className="mb-4 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-700">
+          <div className="mb-4 whitespace-pre-line rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-700">
             {generateMessage}
           </div>
         )}
@@ -317,7 +370,7 @@ export default function DocumentDetailPage() {
               </CardContent>
             </Card>
           )}
-          {chapters.map((ch) => {
+          {paginatedChapters.map((ch) => {
             const status = getChapterStatus(ch)
             return (
               <Card
@@ -373,6 +426,13 @@ export default function DocumentDetailPage() {
                             <Sparkles className="h-3.5 w-3.5" />
                             Tạo thêm
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setViewerChapterId(ch.id)}
+                          >
+                            Xem nội dung
+                          </Button>
                           <Link to={`/study?chapterId=${ch.id}`}>
                             <Button size="sm">
                               <Play className="h-3.5 w-3.5" />
@@ -388,6 +448,22 @@ export default function DocumentDetailPage() {
             )
           })}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-4 pb-2">
+            <span className="text-xs text-slate-500 font-medium">
+              Trang {actualPage} / {totalPages} ({(actualPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPage * ITEMS_PER_PAGE, chapters.length)} / {chapters.length})
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(Math.max(1, actualPage - 1))} disabled={actualPage <= 1}>
+                <ChevronLeft className="h-4 w-4" /> Trước
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages, actualPage + 1))} disabled={actualPage >= totalPages}>
+                Sau <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
@@ -457,6 +533,38 @@ export default function DocumentDetailPage() {
                 </>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(viewerChapter)} onOpenChange={(open) => { if (!open) setViewerChapterId(null) }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{viewerChapter?.title || 'Nội dung chương'}</DialogTitle>
+            <DialogDescription>
+              {viewerChapter?.pageStart != null && viewerChapter?.pageEnd != null
+                ? `Trang ${viewerChapter.pageStart}–${viewerChapter.pageEnd}`
+                : 'Xem nội dung đã trích xuất của chương này.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              <span>{((viewerChapter?.contentText || '').length).toLocaleString('vi-VN')} ký tự</span>
+              {viewerChapter?.questionCount != null && <span>{viewerChapter.questionCount} câu hỏi</span>}
+            </div>
+            <textarea
+              id="viewer-chapter-content"
+              name="viewerChapterContent"
+              readOnly
+              value={viewerChapter?.contentText || ''}
+              rows={18}
+              className="glass-input min-h-[24rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewerChapterId(null)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

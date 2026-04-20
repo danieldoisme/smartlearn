@@ -4,11 +4,11 @@ This document describes the AI modules in SmartLearn and which use cases they se
 
 ## Automated Question Generation (AQG) Agent
 
-Uses Hugging Face Transformers to turn curated chapter text into quiz questions.
+Uses an AI provider-backed AQG pipeline to turn curated chapter text into quiz questions.
 
 - **Use Case**: UC-05 (Tạo câu hỏi tự động từ tài liệu)
 - **What it does**:
-    - Parses chapter content using Transformer models to extract entities and key concepts.
+    - Parses chapter content with provider-backed AI models to extract entities, concepts, and candidate quiz prompts.
     - Generates three question formats: Multiple Choice, Multiple Select, Fill-in-the-blank.
     - Attaches source metadata to each question — the original text segment and page number.
 

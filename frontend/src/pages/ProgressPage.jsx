@@ -21,6 +21,8 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -141,6 +143,7 @@ export default function ProgressPage() {
     endDate: todayString(),
   })
   const [expandedDocId, setExpandedDocId] = useState(null)
+  const [page, setPage] = useState(1)
 
   const { data: weeklyData = [], isLoading: wLoading } = useWeekly(range)
   const { data: accuracyTrend = [], isLoading: aLoading } = useAccuracyTrend(range)
@@ -195,6 +198,13 @@ export default function ProgressPage() {
     ]
   }, [documentProgress, accuracyTrend])
 
+  const ITEMS_PER_PAGE = 5
+  const totalPages = Math.ceil(documentProgress.length / ITEMS_PER_PAGE)
+  const actualPage = page > 1 && page > totalPages ? Math.max(1, totalPages) : page
+  const paginatedDocs = useMemo(() => {
+    return documentProgress.slice((actualPage - 1) * ITEMS_PER_PAGE, actualPage * ITEMS_PER_PAGE)
+  }, [documentProgress, actualPage])
+
   const isLoading = wLoading || aLoading || dLoading
 
   return (
@@ -218,12 +228,13 @@ export default function ProgressPage() {
               <button
                 key={preset.label}
                 type="button"
-                onClick={() =>
+                onClick={() => {
                   setRange({
                     startDate: preset.start,
                     endDate: preset.end,
                   })
-                }
+                  setPage(1)
+                }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
                   active
                     ? 'bg-primary-50 text-primary-700 border border-primary-200'
@@ -244,7 +255,7 @@ export default function ProgressPage() {
               id="progress-start-date"
               type="date"
               value={range.startDate}
-              onChange={(e) => setRange((prev) => ({ ...prev, startDate: e.target.value }))}
+              onChange={(e) => { setRange((prev) => ({ ...prev, startDate: e.target.value })); setPage(1); }}
             />
           </div>
           <div className="space-y-1">
@@ -255,7 +266,7 @@ export default function ProgressPage() {
               id="progress-end-date"
               type="date"
               value={range.endDate}
-              onChange={(e) => setRange((prev) => ({ ...prev, endDate: e.target.value }))}
+              onChange={(e) => { setRange((prev) => ({ ...prev, endDate: e.target.value })); setPage(1); }}
             />
           </div>
         </div>
@@ -330,7 +341,7 @@ export default function ProgressPage() {
             {!isLoading && documentProgress.length === 0 && (
               <p className="text-sm text-slate-500">Chưa có dữ liệu học tập nào.</p>
             )}
-            {documentProgress.map((doc) => (
+            {paginatedDocs.map((doc) => (
               <Card key={doc.id} className="p-5">
                 <CardContent>
                   <div className="flex items-start gap-4">
@@ -399,6 +410,21 @@ export default function ProgressPage() {
                 </CardContent>
               </Card>
             ))}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  Trang {actualPage} / {totalPages} ({(actualPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(actualPage * ITEMS_PER_PAGE, documentProgress.length)} / {documentProgress.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPage(Math.max(1, actualPage - 1))} disabled={actualPage <= 1}>
+                    <ChevronLeft className="h-4 w-4" /> Trước
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPage(Math.min(totalPages, actualPage + 1))} disabled={actualPage >= totalPages}>
+                    Sau <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </TabsContent>
       </Tabs>

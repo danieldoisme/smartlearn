@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     AI_PARSER_MAX_TOKENS: int = 4000
     AI_PARSER_MIN_CONFIDENCE: float = 0.45
 
+    AQG_MODEL: Optional[str] = None
+    AQG_TIMEOUT_SECONDS: float = 120.0
+    AQG_MAX_TOKENS: int = 4000
+    AQG_MAX_PASSAGES: int = 18
+
     DB_HOST: str
     DB_PORT: int = 3306
     DB_USER: str
@@ -53,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def aqg_model(self) -> str:
+        return (self.AQG_MODEL or self.AI_PARSER_MODEL or "qwen").strip() or "qwen"
 
 
 settings = Settings()
