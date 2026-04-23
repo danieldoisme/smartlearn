@@ -15,8 +15,9 @@ export function useStartStudySession() {
       sessionType = 'learn',
       questionLimit,
       questionIds,
+      restart = false,
     }) => {
-      const body = { chapterId, sessionType };
+      const body = { chapterId, sessionType, restart };
       if (questionLimit != null) body.questionLimit = questionLimit;
       if (questionIds?.length) body.questionIds = questionIds;
       return (await apiClient.post('/study-sessions', body)).data;

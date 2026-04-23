@@ -632,13 +632,38 @@ async def update_document_structure(
             .where(Chapter.document_id == doc.id)
         )
     ).scalar_one()
+    
     if question_count:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Không thể chỉnh cấu trúc sau khi đã tạo câu hỏi. Hãy xóa câu hỏi trước.",
-        )
+        if not payload.force_delete_questions:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Không thể chỉnh cấu trúc sau khi đã tạo câu hỏi. Hãy xóa câu hỏi trước.",
+            )
+        
+        # Delete questions and related data
+        chapter_ids_rows = (
+            await db.execute(select(Chapter.id).where(Chapter.document_id == doc.id))
+        ).all()
+        chapter_ids = [r[0] for r in chapter_ids_rows]
+        
+        if chapter_ids:
+            q_ids_rows = (
+                await db.execute(select(Question.id).where(Question.chapter_id.in_(chapter_ids)))
+            ).all()
+            q_ids = [r[0] for r in q_ids_rows]
+            
+            if q_ids:
+                # Same cleanup logic as delete_document
+                await db.execute(delete(Note).where(Note.question_id.in_(q_ids)))
+                await db.execute(delete(UserAnswer).where(UserAnswer.question_id.in_(q_ids)))
+                await db.execute(delete(ExamQuestion).where(ExamQuestion.question_id.in_(q_ids)))
+                await db.execute(delete(QuestionOption).where(QuestionOption.question_id.in_(q_ids)))
+                await db.execute(delete(Question).where(Question.id.in_(q_ids)))
+            
+            await db.execute(delete(StudySession).where(StudySession.chapter_id.in_(chapter_ids)))
 
     existing_chapters = (
+
         (
             await db.execute(
                 select(Chapter)

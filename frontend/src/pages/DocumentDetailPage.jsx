@@ -13,6 +13,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -99,6 +100,7 @@ export default function DocumentDetailPage() {
   const [generateMessage, setGenerateMessage] = useState('')
   const [structureDraft, setStructureDraft] = useState([])
   const [viewerChapterId, setViewerChapterId] = useState(null)
+  const [showEditConfirm, setShowEditConfirm] = useState(false)
   const chapters = useMemo(() => doc?.chapters || [], [doc])
   const viewerChapter = useMemo(
     () => chapters.find((chapter) => chapter.id === viewerChapterId) || null,
@@ -197,7 +199,12 @@ export default function DocumentDetailPage() {
     }
   }
 
-  const openStructureEditor = () => {
+  const openStructureEditor = (force = false) => {
+    if (!canEditStructure && !force) {
+      setShowEditConfirm(true)
+      return
+    }
+
     setGenerateMessage('')
     setStructureDraft(
       chapters.length
@@ -280,7 +287,10 @@ export default function DocumentDetailPage() {
     }
 
     try {
-      await updateStructure.mutateAsync({ chapters: chaptersPayload })
+      await updateStructure.mutateAsync({ 
+        chapters: chaptersPayload,
+        forceDeleteQuestions: !canEditStructure 
+      })
       setGenerateMessage('Đã cập nhật cấu trúc chương thành công.')
       setShowStructureEditor(false)
     } catch (err) {
@@ -341,13 +351,8 @@ export default function DocumentDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={openStructureEditor}
-            disabled={!canEditStructure}
-            title={
-              canEditStructure
-                ? 'Chỉnh sửa cấu trúc chương'
-                : 'Chỉ có thể chỉnh cấu trúc trước khi tạo câu hỏi'
-            }
+            onClick={() => openStructureEditor()}
+            title="Chỉnh sửa cấu trúc chương"
           >
             <PencilLine className="h-3.5 w-3.5" />
             Chỉnh cấu trúc
@@ -559,7 +564,7 @@ export default function DocumentDetailPage() {
               readOnly
               value={viewerChapter?.contentText || ''}
               rows={18}
-              className="glass-input min-h-[24rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+              className="glass-input min-h-96 w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
             />
           </div>
 
@@ -580,15 +585,18 @@ export default function DocumentDetailPage() {
 
           <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
             {!canEditStructure && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                Tài liệu đã có câu hỏi. Hiện chỉ hỗ trợ chỉnh cấu trúc trước khi tạo câu hỏi.
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 flex gap-2">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <span>
+                  Tài liệu này đã có câu hỏi. Việc thay đổi cấu trúc sẽ <strong>xóa toàn bộ câu hỏi và tiến trình học</strong> hiện có.
+                </span>
               </div>
             )}
 
-	            {structureDraft.map((chapter, index) => (
-	              <Card key={`${index}-${chapter.title}`} className="p-4">
-	                <CardContent className="space-y-3">
-	                  <div className="flex items-center justify-between gap-3">
+            {structureDraft.map((chapter, index) => (
+              <Card key={`${index}-${chapter.title}`} className="p-4">
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-slate-800">
                       Chương {index + 1}
                     </h3>
@@ -596,7 +604,7 @@ export default function DocumentDetailPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => removeDraftItem(index)}
-                      disabled={structureDraft.length <= 1 || !canEditStructure}
+                      disabled={structureDraft.length <= 1}
                     >
 	                      <Trash2 className="h-4 w-4" />
 	                    </Button>
@@ -617,7 +625,6 @@ export default function DocumentDetailPage() {
                     onChange={(e) =>
                       updateDraftItem(index, { title: e.target.value })
                     }
-                    disabled={!canEditStructure}
                     placeholder="Tên chương"
                   />
 
@@ -632,7 +639,6 @@ export default function DocumentDetailPage() {
                       onChange={(e) =>
                         updateDraftItem(index, { pageStart: e.target.value })
                       }
-                      disabled={!canEditStructure}
                       placeholder="Trang bắt đầu"
                     />
                     <Input
@@ -645,7 +651,6 @@ export default function DocumentDetailPage() {
                       onChange={(e) =>
                         updateDraftItem(index, { pageEnd: e.target.value })
                       }
-                      disabled={!canEditStructure}
                       placeholder="Trang kết thúc"
                     />
                   </div>
@@ -655,14 +660,13 @@ export default function DocumentDetailPage() {
                     name={`chapter-content-${index}`}
                     aria-label="Nội dung chương"
                     value={chapter.contentText}
-	                    onChange={(e) =>
-	                      updateDraftItem(index, { contentText: e.target.value })
-	                    }
-	                    disabled={!canEditStructure}
-	                    rows={12}
-	                    className="glass-input min-h-[16rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
-	                    placeholder="Nội dung chương"
-	                  />
+                    onChange={(e) =>
+                      updateDraftItem(index, { contentText: e.target.value })
+                    }
+                    rows={12}
+                    className="glass-input min-h-64 w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+                    placeholder="Nội dung chương"
+                  />
 	                </CardContent>
               </Card>
             ))}
@@ -672,7 +676,6 @@ export default function DocumentDetailPage() {
             <Button
               variant="outline"
               onClick={addDraftItem}
-              disabled={!canEditStructure}
             >
               <Plus className="h-4 w-4" />
               Thêm chương
@@ -682,9 +685,36 @@ export default function DocumentDetailPage() {
             </Button>
             <Button
               onClick={handleSaveStructure}
-              disabled={!canEditStructure || updateStructure.isPending}
+              disabled={updateStructure.isPending}
             >
               {updateStructure.isPending ? 'Đang lưu...' : 'Lưu cấu trúc'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditConfirm} onOpenChange={setShowEditConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Xác nhận chỉnh sửa cấu trúc
+            </DialogTitle>
+            <DialogDescription>
+              Việc chỉnh sửa cấu trúc sẽ <strong>xóa toàn bộ câu hỏi</strong> đã tạo cho tài liệu này. 
+              Bạn có chắc chắn muốn tiếp tục?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowEditConfirm(false)}>Hủy bỏ</Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={() => {
+                setShowEditConfirm(false)
+                openStructureEditor(true)
+              }}
+            >
+              Tiếp tục và xóa câu hỏi
             </Button>
           </DialogFooter>
         </DialogContent>

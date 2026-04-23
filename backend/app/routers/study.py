@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -124,7 +124,7 @@ async def _own_session(db: AsyncSession, session_id: int, user_id: int) -> Study
     return sess
 
 
-def _to_question_out(q: Question) -> QuestionOut:
+def _to_question_out(q: Question, ans: Optional[UserAnswer] = None) -> QuestionOut:
     chapter = getattr(q, "chapter", None)
     document = getattr(chapter, "document", None) if chapter is not None else None
     return QuestionOut(
@@ -145,6 +145,8 @@ def _to_question_out(q: Question) -> QuestionOut:
             QuestionOptionOut(id=o.id, label=o.label, content=o.content)
             for o in sorted(q.options, key=lambda x: x.label)
         ],
+        user_answer=ans.selected_answer if ans else None,
+        is_correct=ans.is_correct if ans else None,
     )
 
 
@@ -223,6 +225,16 @@ async def start_session(
     db: AsyncSession = Depends(get_db),
 ):
     await _own_chapter(db, payload.chapter_id, current.id)
+    
+    if payload.restart:
+        await db.execute(
+            delete(UserAnswer)
+            .where(UserAnswer.user_id == current.id)
+            .where(UserAnswer.question_id.in_(
+                select(Question.id).where(Question.chapter_id == payload.chapter_id)
+            ))
+        )
+        await db.commit()
 
     limit = payload.question_limit
     if limit is None:
@@ -271,19 +283,8 @@ async def start_session(
         )
 
         if payload.session_type == SessionType.LEARN:
-            answered_ids = {
-                row[0]
-                for row in (
-                    await db.execute(
-                        select(UserAnswer.question_id)
-                        .join(Question, Question.id == UserAnswer.question_id)
-                        .where(UserAnswer.user_id == current.id)
-                        .where(Question.chapter_id == payload.chapter_id)
-                        .group_by(UserAnswer.question_id)
-                    )
-                ).all()
-            }
-            q_rows = _pick_session_questions(q_rows, answered_ids, limit)
+            # For LEARN mode, return ALL questions for the chapter
+            q_rows = q_rows  # No filtering by limit or answered
         else:
             q_rows = q_rows[:limit]
 
@@ -301,11 +302,25 @@ async def start_session(
     await db.commit()
     await db.refresh(session)
 
+    ans_map = {}
+    if q_rows:
+        ans_rows = (
+            await db.execute(
+                select(UserAnswer)
+                .where(UserAnswer.user_id == current.id)
+                .where(UserAnswer.question_id.in_([q.id for q in q_rows]))
+                .order_by(UserAnswer.answered_at.desc())
+            )
+        ).scalars().all()
+        for ans in ans_rows:
+            if ans.question_id not in ans_map:
+                ans_map[ans.question_id] = ans
+
     return StudySessionStartOut(
         session_id=session.id,
         chapter_id=session.chapter_id,
         session_type=session.session_type,
-        questions=[_to_question_out(q) for q in q_rows],
+        questions=[_to_question_out(q, ans_map.get(q.id)) for q in q_rows],
     )
 
 
@@ -338,16 +353,32 @@ async def submit_answer(
     else:
         is_correct, correct_answer, correct_label = _grade(q, payload.selected_answer)
 
-    db.add(
-        UserAnswer(
-            session_id=session.id,
-            question_id=q.id,
-            user_id=current.id,
-            selected_answer=payload.selected_answer if not payload.is_skipped else None,
-            is_correct=is_correct,
-            is_skipped=payload.is_skipped,
+    # Upsert: check for existing answer for this question and user
+    existing_row = (
+        await db.execute(
+            select(UserAnswer)
+            .where(UserAnswer.user_id == current.id)
+            .where(UserAnswer.question_id == q.id)
         )
-    )
+    ).scalar_one_or_none()
+
+    if existing_row:
+        existing_row.session_id = session.id
+        existing_row.selected_answer = payload.selected_answer if not payload.is_skipped else None
+        existing_row.is_correct = is_correct
+        existing_row.is_skipped = payload.is_skipped
+        existing_row.answered_at = datetime.now(timezone.utc)
+    else:
+        db.add(
+            UserAnswer(
+                session_id=session.id,
+                question_id=q.id,
+                user_id=current.id,
+                selected_answer=payload.selected_answer if not payload.is_skipped else None,
+                is_correct=is_correct,
+                is_skipped=payload.is_skipped,
+            )
+        )
     await db.commit()
 
     return StudyAnswerOut(

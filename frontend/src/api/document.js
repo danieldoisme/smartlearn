@@ -31,8 +31,13 @@ export function useGenerateQuestions(documentId) {
 export function useUpdateDocumentStructure(documentId) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ chapters }) =>
-      (await apiClient.put(`/documents/${documentId}/structure`, { chapters })).data,
+    mutationFn: async ({ chapters, forceDeleteQuestions = false }) =>
+      (
+        await apiClient.put(`/documents/${documentId}/structure`, {
+          chapters,
+          forceDeleteQuestions,
+        })
+      ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['document', documentId] });
       qc.invalidateQueries({ queryKey: ['documents'] });

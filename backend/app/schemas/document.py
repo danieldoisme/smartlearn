@@ -94,3 +94,5 @@ class DocumentDetailOut(LibraryDocumentOut):
 
 class DocumentStructureUpdateIn(CamelModel):
     chapters: list[ChapterStructureIn] = Field(min_length=1, max_length=1000)
+    force_delete_questions: bool = False
+

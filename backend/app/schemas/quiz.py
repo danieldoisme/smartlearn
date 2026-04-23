@@ -40,6 +40,8 @@ class QuestionOut(CamelModel):
     source_context: Optional[str] = None
     source_page: Optional[int] = None
     options: List[QuestionOptionOut] = []
+    user_answer: Optional[str] = None
+    is_correct: Optional[bool] = None
 
 
 class StudySessionStart(CamelModel):
@@ -47,6 +49,7 @@ class StudySessionStart(CamelModel):
     session_type: SessionType = SessionType.LEARN
     question_limit: Optional[int] = Field(default=None, ge=1, le=100)
     question_ids: List[int] = Field(default_factory=list)
+    restart: bool = False
 
 
 class StudySessionStartOut(CamelModel):
