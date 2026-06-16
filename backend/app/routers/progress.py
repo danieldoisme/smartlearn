@@ -177,23 +177,23 @@ async def accuracy_trend(
 async def documents(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     start_date, end_date = _normalize_range(start_date, end_date)
     start_dt, end_dt = _to_dt_range(start_date, end_date)
 
-    docs = (
-        (
-            await db.execute(
-                select(Document)
-                .where(Document.user_id == current.id)
-                .order_by(Document.updated_at.desc())
-            )
-        )
-        .scalars()
-        .all()
+    doc_q = (
+        select(Document)
+        .where(Document.user_id == current.id)
+        .order_by(Document.updated_at.desc())
+        .offset(offset)
     )
+    if limit is not None:
+        doc_q = doc_q.limit(limit)
+    docs = ((await db.execute(doc_q)).scalars().all())
     if not docs:
         return []
 

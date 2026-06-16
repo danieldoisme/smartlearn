@@ -23,6 +23,19 @@
 
 ---
 
+## Architectural Decisions
+
+> These decisions represent intentional deviations from the initial specification, made to improve development velocity, deployment simplicity, or system cohesion.
+
+| Decision | Rationale |
+|---|---|
+| **Email verification is Out-of-Scope** | Email confirmation (UC-01 A1 steps 5–6) is not implemented. Accounts are activated immediately on registration. This simplifies local development, testing, and deployment velocity. Re-enabling it requires adding a verification token flow to `auth.py` and `services/email.py`. |
+| **Exam answers mirror to StudySession (UC-12 → UC-09)** | When an exam is submitted, the backend creates one `StudySession` record per chapter covered by the exam and writes all answers into `user_answers`. This feeds the progress tracking system (UC-09) automatically without any separate sync step. |
+| **AI document parser has a silent fallback (UC-03)** | `document_processing.py` calls the AI parser first. On any failure it falls back to a heuristic text-extraction parser without surfacing an error to the user. The response includes `used_fallback: true` to indicate which path was taken. |
+| **Document deletion cascades fully (UC-04)** | Deleting a document removes: chapters → questions → question options → user answers → bookmarks → notes in a single transaction. The spec only required a confirmation prompt; the cascade depth exceeds that requirement. |
+
+---
+
 ## 2. Use Case Index
 
 | ID | Use Case Name | Actor |
@@ -74,8 +87,9 @@ _A1 — Register New Account_
 | 2 | System displays registration form: *Full Name*, *Email*, *Password*, *Confirm Password*. |
 | 3 | User fills in all fields and clicks **Register**. |
 | 4 | System validates input (email not already registered, password strength). |
-| 5 | System creates account and sends a confirmation email. |
-| 6 | User confirms email and returns to log in. |
+| 5 | System creates account and immediately issues a JWT token; user is redirected to Dashboard. |
+
+> **Note:** Email verification is Out-of-Scope for this phase. See Architectural Decisions above.
 
 _A2 — Forgot Password / Recovery_
 

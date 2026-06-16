@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.app.core.deps import get_current_user, get_db
 from backend.app.models.content import Chapter, Document, Topic
+from backend.app.models.enums import QuestionType
 from backend.app.models.interaction import Bookmark, Note
 from backend.app.models.quiz import (
     Exam,
@@ -40,10 +41,65 @@ from backend.app.schemas.document import (
     DocumentUpdateIn,
     LibraryDocumentOut,
 )
-from backend.app.schemas.quiz import QuestionGenerationIn, QuestionGenerationOut
+from backend.app.schemas.quiz import (
+    QuestionGenerationIn,
+    QuestionGenerationOut,
+    QuestionOptionIn,
+    QuestionOptionOut,
+    QuestionOut,
+    QuestionUpdateIn,
+)
 from backend.app.schemas.topic import TopicCreate, TopicOut
 
 router = APIRouter(tags=["library"])
+
+
+def _build_source_context(
+    content_text: Optional[str], source_text: Optional[str], radius: int = 180
+) -> Optional[str]:
+    if not content_text or not source_text:
+        return None
+    content = " ".join(content_text.split())
+    source = " ".join(source_text.split())
+    index = content.lower().find(source.lower())
+    if index == -1:
+        return None
+    start = max(0, index - radius)
+    end = min(len(content), index + len(source) + radius)
+    snippet = content[start:end].strip()
+    if start > 0:
+        snippet = f"…{snippet}"
+    if end < len(content):
+        snippet = f"{snippet}…"
+    return snippet
+
+
+def _question_to_out(q: Question, full_section: bool = False) -> QuestionOut:
+    chapter = getattr(q, "chapter", None)
+    document = getattr(chapter, "document", None) if chapter is not None else None
+    if full_section:
+        source_context = chapter.content_text if chapter is not None else None
+    else:
+        source_context = _build_source_context(
+            chapter.content_text if chapter is not None else None,
+            q.source_text,
+        )
+    return QuestionOut(
+        id=q.id,
+        chapter_id=q.chapter_id,
+        question_type=q.question_type,
+        content=q.content,
+        chapter_title=chapter.title if chapter is not None else None,
+        document_id=document.id if document is not None else None,
+        document_title=document.title if document is not None else None,
+        source_text=q.source_text,
+        source_context=source_context,
+        source_page=q.source_page,
+        options=[
+            QuestionOptionOut(id=o.id, label=o.label, content=o.content)
+            for o in sorted(q.options, key=lambda x: x.label)
+        ],
+    )
 
 
 async def _resolve_topic(
@@ -419,13 +475,17 @@ async def delete_document(
 @router.get("/documents", response_model=List[LibraryDocumentOut])
 async def list_documents(
     topic_id: Optional[int] = Query(default=None),
+    limit: Optional[int] = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(Document).where(Document.user_id == current.id)
     if topic_id is not None:
         q = q.where(Document.topic_id == topic_id)
-    q = q.order_by(Document.created_at.desc())
+    q = q.order_by(Document.created_at.desc()).offset(offset)
+    if limit is not None:
+        q = q.limit(limit)
     docs = (await db.execute(q)).scalars().all()
 
     topic_names = dict(
@@ -783,3 +843,136 @@ async def generate_questions(
         provider=generation.provider,
         used_fallback=generation.used_fallback,
     )
+
+
+@router.get("/chapters/{chapter_id}/questions", response_model=List[QuestionOut])
+async def list_chapter_questions(
+    chapter_id: int,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    chapter = (
+        await db.execute(
+            select(Chapter)
+            .options(selectinload(Chapter.document))
+            .join(Document, Document.id == Chapter.document_id)
+            .where(Chapter.id == chapter_id)
+            .where(Document.user_id == current.id)
+        )
+    ).scalar_one_or_none()
+    if chapter is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Chapter not found")
+
+    questions = (
+        await db.execute(
+            select(Question)
+            .options(
+                selectinload(Question.options),
+                selectinload(Question.chapter).selectinload(Chapter.document),
+            )
+            .where(Question.chapter_id == chapter_id)
+            .order_by(Question.id)
+        )
+    ).scalars().all()
+
+    return [_question_to_out(q) for q in questions]
+
+
+@router.get("/questions/{question_id}", response_model=QuestionOut)
+async def get_question(
+    question_id: int,
+    full_section: bool = Query(default=False),
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    question = (
+        await db.execute(
+            select(Question)
+            .options(
+                selectinload(Question.options),
+                selectinload(Question.chapter).selectinload(Chapter.document),
+            )
+            .join(Chapter, Chapter.id == Question.chapter_id)
+            .join(Document, Document.id == Chapter.document_id)
+            .where(Question.id == question_id)
+            .where(Document.user_id == current.id)
+        )
+    ).scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found")
+
+    return _question_to_out(question, full_section=full_section)
+
+
+@router.patch("/questions/{question_id}", response_model=QuestionOut)
+async def update_question(
+    question_id: int,
+    payload: QuestionUpdateIn,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    question = (
+        await db.execute(
+            select(Question)
+            .options(
+                selectinload(Question.options),
+                selectinload(Question.chapter).selectinload(Chapter.document),
+            )
+            .join(Chapter, Chapter.id == Question.chapter_id)
+            .join(Document, Document.id == Chapter.document_id)
+            .where(Question.id == question_id)
+            .where(Document.user_id == current.id)
+        )
+    ).scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found")
+
+    if payload.content is not None:
+        question.content = payload.content
+
+    if payload.correct_answer is not None:
+        question.correct_answer = payload.correct_answer
+
+    if payload.options is not None:
+        if question.question_type in (QuestionType.MCQ, QuestionType.MULTI):
+            option_labels = {o.label.upper() for o in payload.options}
+            correct_labels = {
+                part.strip().upper()
+                for part in (payload.correct_answer or question.correct_answer or "").split(",")
+                if part.strip()
+            }
+            missing = correct_labels - option_labels
+            if missing:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"correct_answer label(s) {missing} not found in provided options",
+                )
+
+        await db.execute(
+            delete(QuestionOption).where(QuestionOption.question_id == question.id)
+        )
+        for opt in payload.options:
+            db.add(
+                QuestionOption(
+                    question_id=question.id,
+                    label=opt.label.upper(),
+                    content=opt.content[:500],
+                    is_correct=opt.is_correct,
+                )
+            )
+
+    await db.commit()
+    await db.refresh(question)
+
+    refreshed = (
+        await db.execute(
+            select(Question)
+            .options(
+                selectinload(Question.options),
+                selectinload(Question.chapter).selectinload(Chapter.document),
+            )
+            .where(Question.id == question.id)
+        )
+    ).scalar_one()
+
+    return _question_to_out(refreshed)

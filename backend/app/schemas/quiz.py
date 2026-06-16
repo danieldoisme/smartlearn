@@ -13,6 +13,18 @@ class QuestionOptionOut(CamelModel):
     content: str
 
 
+class QuestionOptionIn(CamelModel):
+    label: str = Field(min_length=1, max_length=1)
+    content: str = Field(min_length=1, max_length=500)
+    is_correct: bool
+
+
+class QuestionUpdateIn(CamelModel):
+    content: Optional[str] = Field(default=None, min_length=1)
+    correct_answer: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    options: Optional[List[QuestionOptionIn]] = None
+
+
 class QuestionGenerationIn(CamelModel):
     question_type: str = Field(pattern="^(mcq|multi|fill|mixed)$")
     count: int = Field(default=10, ge=1, le=50)

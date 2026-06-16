@@ -13,6 +13,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ListChecks,
+  Save,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,6 +35,8 @@ import {
   useDocumentDetail,
   useGenerateQuestions,
   useUpdateDocumentStructure,
+  useChapterQuestions,
+  useUpdateQuestion,
 } from '@/api/document'
 
 const questionTypes = [
@@ -99,6 +103,12 @@ export default function DocumentDetailPage() {
   const [generateMessage, setGenerateMessage] = useState('')
   const [structureDraft, setStructureDraft] = useState([])
   const [viewerChapterId, setViewerChapterId] = useState(null)
+  const [questionsChapterId, setQuestionsChapterId] = useState(null)
+  const [editingQuestion, setEditingQuestion] = useState(null)
+  const [editDraft, setEditDraft] = useState({ content: '', correctAnswer: '', options: [] })
+  const [editMessage, setEditMessage] = useState('')
+  const { data: chapterQuestions = [], isFetching: questionsLoading } = useChapterQuestions(questionsChapterId)
+  const updateQuestion = useUpdateQuestion(docId)
   const chapters = useMemo(() => doc?.chapters || [], [doc])
   const viewerChapter = useMemo(
     () => chapters.find((chapter) => chapter.id === viewerChapterId) || null,
@@ -429,6 +439,14 @@ export default function DocumentDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setQuestionsChapterId(ch.id)}
+                          >
+                            <ListChecks className="h-3.5 w-3.5" />
+                            Sửa câu hỏi
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setViewerChapterId(ch.id)}
                           >
                             Xem nội dung
@@ -685,6 +703,166 @@ export default function DocumentDetailPage() {
               disabled={!canEditStructure || updateStructure.isPending}
             >
               {updateStructure.isPending ? 'Đang lưu...' : 'Lưu cấu trúc'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(questionsChapterId)}
+        onOpenChange={(open) => { if (!open) { setQuestionsChapterId(null); setEditMessage('') } }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-primary-500" />
+              Danh sách câu hỏi
+            </DialogTitle>
+            <DialogDescription>
+              {chapters.find((c) => c.id === questionsChapterId)?.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editMessage && (
+            <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-700">
+              {editMessage}
+            </div>
+          )}
+
+          <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+            {questionsLoading && (
+              <p className="text-sm text-slate-500 text-center py-6">Đang tải...</p>
+            )}
+            {!questionsLoading && chapterQuestions.length === 0 && (
+              <p className="text-sm text-slate-500 text-center py-6">Chưa có câu hỏi nào.</p>
+            )}
+            {chapterQuestions.map((q, idx) => (
+              <div key={q.id} className="rounded-xl border border-slate-200 p-3 flex items-start gap-3">
+                <span className="text-xs text-slate-400 font-mono mt-0.5 shrink-0">{idx + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-800 line-clamp-2">{q.content}</p>
+                  <p className="text-xs text-slate-400 mt-1">{q.questionType}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingQuestion(q)
+                    const correctLabels = new Set(
+                      (q.correctAnswer ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+                    )
+                    setEditDraft({
+                      content: q.content,
+                      correctAnswer: q.correctAnswer ?? '',
+                      options: q.options.map((o) => ({ label: o.label, content: o.content, isCorrect: correctLabels.has(o.label.toUpperCase()) })),
+                    })
+                    setEditMessage('')
+                  }}
+                >
+                  <PencilLine className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setQuestionsChapterId(null); setEditMessage('') }}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingQuestion)}
+        onOpenChange={(open) => { if (!open) { setEditingQuestion(null); setEditMessage('') } }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa câu hỏi</DialogTitle>
+            <DialogDescription>ID: {editingQuestion?.id}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Nội dung câu hỏi</label>
+              <textarea
+                value={editDraft.content}
+                onChange={(e) => setEditDraft((d) => ({ ...d, content: e.target.value }))}
+                rows={4}
+                className="glass-input w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Đáp án đúng</label>
+              <Input
+                value={editDraft.correctAnswer}
+                onChange={(e) => setEditDraft((d) => ({ ...d, correctAnswer: e.target.value }))}
+                placeholder="Nhập đáp án đúng"
+              />
+            </div>
+
+            {editingQuestion && editingQuestion.options.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Các lựa chọn</label>
+                <div className="space-y-2">
+                  {editDraft.options.map((opt, i) => (
+                    <div key={opt.label} className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-slate-500 w-5 shrink-0">{opt.label}</span>
+                      <Input
+                        value={opt.content}
+                        onChange={(e) =>
+                          setEditDraft((d) => ({
+                            ...d,
+                            options: d.options.map((o, idx) =>
+                              idx === i ? { ...o, content: e.target.value } : o
+                            ),
+                          }))
+                        }
+                        placeholder={`Lựa chọn ${opt.label}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => { setEditingQuestion(null); setEditMessage('') }}>Hủy</Button>
+            <Button
+              onClick={async () => {
+                if (!editDraft.content.trim()) {
+                  setEditMessage('Nội dung câu hỏi không được để trống.')
+                  return
+                }
+                if (!editDraft.correctAnswer.trim()) {
+                  setEditMessage('Đáp án đúng không được để trống.')
+                  return
+                }
+                try {
+                  const payload = {
+                    questionId: editingQuestion.id,
+                    chapterId: editingQuestion.chapterId,
+                    content: editDraft.content.trim(),
+                    correctAnswer: editDraft.correctAnswer.trim(),
+                  }
+                  if (editDraft.options.length > 0) {
+                    payload.options = editDraft.options.map((o) => ({
+                      label: o.label,
+                      content: o.content,
+                      isCorrect: editDraft.correctAnswer.trim().toUpperCase().split(',').map((s) => s.trim()).includes(o.label.toUpperCase()),
+                    }))
+                  }
+                  await updateQuestion.mutateAsync(payload)
+                  setEditMessage('Đã lưu câu hỏi thành công.')
+                  setEditingQuestion(null)
+                } catch (err) {
+                  setEditMessage(getErrorMessage(err, 'Không thể lưu câu hỏi.'))
+                }
+              }}
+              disabled={updateQuestion.isPending}
+            >
+              {updateQuestion.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Lưu
             </Button>
           </DialogFooter>
         </DialogContent>

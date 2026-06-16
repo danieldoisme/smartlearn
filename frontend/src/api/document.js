@@ -41,3 +41,23 @@ export function useUpdateDocumentStructure(documentId) {
     },
   });
 }
+
+export function useChapterQuestions(chapterId) {
+  return useQuery({
+    queryKey: ['chapter-questions', chapterId],
+    queryFn: async () => (await apiClient.get(`/chapters/${chapterId}/questions`)).data,
+    enabled: Boolean(chapterId),
+  });
+}
+
+export function useUpdateQuestion(documentId) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ questionId, ...payload }) =>
+      (await apiClient.patch(`/questions/${questionId}`, payload)).data,
+    onSuccess: (_data, { chapterId }) => {
+      qc.invalidateQueries({ queryKey: ['chapter-questions', chapterId] });
+      qc.invalidateQueries({ queryKey: ['document', documentId] });
+    },
+  });
+}
