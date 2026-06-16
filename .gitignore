@@ -39,6 +39,8 @@ uv.lock
 .claude/
 .omx/
 .codex/
+.agents/
+.github/
 
 # User uploads
 backend/uploads/
