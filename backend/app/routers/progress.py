@@ -193,7 +193,7 @@ async def documents(
     )
     if limit is not None:
         doc_q = doc_q.limit(limit)
-    docs = ((await db.execute(doc_q)).scalars().all())
+    docs = (await db.execute(doc_q)).scalars().all()
     if not docs:
         return []
 

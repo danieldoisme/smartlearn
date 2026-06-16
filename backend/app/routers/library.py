@@ -44,7 +44,6 @@ from backend.app.schemas.document import (
 from backend.app.schemas.quiz import (
     QuestionGenerationIn,
     QuestionGenerationOut,
-    QuestionOptionIn,
     QuestionOptionOut,
     QuestionOut,
     QuestionUpdateIn,
@@ -864,16 +863,20 @@ async def list_chapter_questions(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Chapter not found")
 
     questions = (
-        await db.execute(
-            select(Question)
-            .options(
-                selectinload(Question.options),
-                selectinload(Question.chapter).selectinload(Chapter.document),
+        (
+            await db.execute(
+                select(Question)
+                .options(
+                    selectinload(Question.options),
+                    selectinload(Question.chapter).selectinload(Chapter.document),
+                )
+                .where(Question.chapter_id == chapter_id)
+                .order_by(Question.id)
             )
-            .where(Question.chapter_id == chapter_id)
-            .order_by(Question.id)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [_question_to_out(q) for q in questions]
 
@@ -938,7 +941,9 @@ async def update_question(
             option_labels = {o.label.upper() for o in payload.options}
             correct_labels = {
                 part.strip().upper()
-                for part in (payload.correct_answer or question.correct_answer or "").split(",")
+                for part in (
+                    payload.correct_answer or question.correct_answer or ""
+                ).split(",")
                 if part.strip()
             }
             missing = correct_labels - option_labels

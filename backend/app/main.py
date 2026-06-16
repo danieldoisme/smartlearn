@@ -1,15 +1,10 @@
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import List
-import httpx
 
 from backend.app.config import settings
-from backend.app.core.deps import get_current_user
-from backend.app.models.user import User
 from backend.app.routers import auth as auth_router
 from backend.app.routers import me as me_router
 from backend.app.routers import progress as progress_router
@@ -35,46 +30,9 @@ app.add_middleware(
 )
 
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-    model: str = "qwen"
-    max_tokens: int = 16384
-
-
 @app.get("/")
 async def root():
     return {"message": f"Welcome to {settings.APP_NAME}", "status": "running"}
-
-
-@app.post("/ai/chat")
-async def chat(request: ChatRequest, _: User = Depends(get_current_user)):
-    headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
-        "max_tokens": request.max_tokens,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(
-                f"{settings.AI_SERVER_URL.rstrip('/')}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"Request Error: {str(e)}")
 
 
 app.include_router(auth_router.router)

@@ -4,21 +4,20 @@ from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
-    AI_SERVER_URL: str
-    AI_API_KEY: str
-    AI_PARSER_MODEL: str = "qwen"
-    AI_PARSER_TIMEOUT_SECONDS: float = 90.0
+    GEMINI_API_KEY: str
+    GEMINI_MODEL: str = "gemini-3.1-pro"
+
+    AI_PARSER_TIMEOUT_SECONDS: float = 180.0
     AI_PARSER_MAX_CHARS: int = 48000
     AI_PARSER_MAX_INPUT_TOKENS: int = 8500
     AI_PARSER_MAX_TOKENS: int = 4000
     AI_PARSER_MIN_CONFIDENCE: float = 0.45
 
-    AQG_MODEL: Optional[str] = None
-    AQG_TIMEOUT_SECONDS: float = 120.0
+    AQG_TIMEOUT_SECONDS: float = 240.0
     AQG_MAX_TOKENS: int = 4000
     AQG_MAX_PASSAGES: int = 18
 
-    DB_HOST: str
+    DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str
     DB_PASSWORD: str
@@ -58,10 +57,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
-
-    @property
-    def aqg_model(self) -> str:
-        return (self.AQG_MODEL or self.AI_PARSER_MODEL or "qwen").strip() or "qwen"
 
 
 settings = Settings()

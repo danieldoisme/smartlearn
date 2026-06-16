@@ -9,8 +9,8 @@ import httpx
 from backend.app.config import settings
 from backend.app.models.enums import FileType, QuestionType
 from backend.app.services.ai_document_parsing import (
-    _extract_message_content,
-    _post_chat_completions,
+    _extract_gemini_content,
+    _post_gemini,
     _preview_text,
 )
 from backend.app.services.document_processing import extract_pages_from_path
@@ -245,39 +245,24 @@ async def _generate_questions_via_ai(
 ) -> tuple[list[GeneratedQuestionDraft], list[str]]:
     if not passages:
         return [], ["No passages available for AI generation."]
-    headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": settings.aqg_model,
-        "messages": [
-            {"role": "system", "content": _aqg_system_prompt()},
-            {
-                "role": "user",
-                "content": _aqg_user_prompt(
-                    chapter_title=chapter_title,
-                    question_type=question_type,
-                    count=count,
-                    passages=passages,
-                ),
-            },
-        ],
-        "max_tokens": settings.AQG_MAX_TOKENS,
-        "temperature": 0.2,
-        "chat_template_kwargs": {"enable_thinking": False},
-        "reasoning_format": "none",
-        "response_format": _aqg_response_format_schema(),
-    }
     async with httpx.AsyncClient(timeout=settings.AQG_TIMEOUT_SECONDS) as client:
-        response = await _post_chat_completions(
+        response = await _post_gemini(
             client,
-            base_url=settings.AI_SERVER_URL,
-            headers=headers,
-            payload=payload,
+            api_key=settings.GEMINI_API_KEY,
+            model=settings.GEMINI_MODEL,
+            system_prompt=_aqg_system_prompt(),
+            user_prompt=_aqg_user_prompt(
+                chapter_title=chapter_title,
+                question_type=question_type,
+                count=count,
+                passages=passages,
+            ),
+            response_schema=_aqg_response_schema(),
+            max_tokens=settings.AQG_MAX_TOKENS,
+            temperature=0.2,
         )
         response.raise_for_status()
-    message = _extract_message_content(response.json())
+    message = _extract_gemini_content(response.json())
     data = _load_json_payload(message)
     if not isinstance(data, dict):
         raise ValueError(
@@ -299,7 +284,6 @@ async def _generate_questions_via_ai(
 
 def _aqg_system_prompt() -> str:
     return (
-        "/nothink\n"
         "You generate high-quality quiz questions from provided passages. "
         "Return JSON only. Never explain. Use only facts explicitly stated in passages. "
         "Prioritize conceptual understanding: definitions, rules, formulas, properties, conditions, relationships, and meanings. "
@@ -360,77 +344,50 @@ Output schema:
 """.strip()
 
 
-def _aqg_response_format_schema() -> dict[str, Any]:
+def _aqg_response_schema() -> dict[str, Any]:
     return {
-        "type": "json_schema",
-        "schema": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "warnings": {
-                    "type": "array",
-                    "items": {"type": "string", "maxLength": 200},
-                    "maxItems": 6,
-                },
-                "questions": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 50,
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "question_type": {
-                                "type": "string",
-                                "enum": ["mcq", "multi", "fill"],
-                            },
-                            "content": {
-                                "type": "string",
-                                "minLength": 12,
-                                "maxLength": 500,
-                            },
-                            "correct_answer": {
-                                "anyOf": [
-                                    {"type": "string", "maxLength": 500},
-                                    {"type": "null"},
-                                ]
-                            },
-                            "source_passage_id": {"type": "integer", "minimum": 1},
-                            "options": {
-                                "type": "array",
-                                "maxItems": 5,
-                                "items": {
-                                    "type": "object",
-                                    "additionalProperties": False,
-                                    "properties": {
-                                        "label": {
-                                            "type": "string",
-                                            "minLength": 1,
-                                            "maxLength": 2,
-                                        },
-                                        "content": {
-                                            "type": "string",
-                                            "minLength": 1,
-                                            "maxLength": 500,
-                                        },
-                                        "is_correct": {"type": "boolean"},
-                                    },
-                                    "required": ["label", "content", "is_correct"],
+        "type": "OBJECT",
+        "properties": {
+            "warnings": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "questions": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "question_type": {
+                            "type": "STRING",
+                            "enum": ["mcq", "multi", "fill"],
+                        },
+                        "content": {"type": "STRING"},
+                        "correct_answer": {"type": "STRING"},
+                        "source_passage_id": {"type": "INTEGER"},
+                        "options": {
+                            "type": "ARRAY",
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "label": {"type": "STRING"},
+                                    "content": {"type": "STRING"},
+                                    "is_correct": {"type": "BOOLEAN"},
                                 },
+                                "required": ["label", "content", "is_correct"],
                             },
                         },
-                        "required": [
-                            "question_type",
-                            "content",
-                            "correct_answer",
-                            "source_passage_id",
-                            "options",
-                        ],
                     },
+                    "required": [
+                        "question_type",
+                        "content",
+                        "correct_answer",
+                        "source_passage_id",
+                        "options",
+                    ],
                 },
             },
-            "required": ["warnings", "questions"],
         },
+        "required": ["warnings", "questions"],
     }
 
 

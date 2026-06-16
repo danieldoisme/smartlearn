@@ -3,7 +3,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
@@ -13,6 +12,8 @@ from backend.app.models.enums import FileType
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 logger = logging.getLogger(__name__)
+
+_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 @dataclass
@@ -47,10 +48,6 @@ async def infer_document_structure(
     if not pages:
         return AIParseOutcome(diagnostics=["No pages extracted for AI parser"])
 
-    headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY}",
-        "Content-Type": "application/json",
-    }
     max_chars = settings.AI_PARSER_MAX_CHARS
     max_input_tokens = settings.AI_PARSER_MAX_INPUT_TOKENS
     truncated_any = False
@@ -67,41 +64,29 @@ async def infer_document_structure(
                 diagnostics=["AI parser input became empty after preprocessing"]
             )
 
-        payload = {
-            "model": settings.AI_PARSER_MODEL,
-            "messages": [
-                {"role": "system", "content": _system_prompt()},
-                {
-                    "role": "user",
-                    "content": _user_prompt(
-                        file_type=file_type,
-                        document_title=document_title,
-                        prepared_pages=prepared,
-                    ),
-                },
-            ],
-            "max_tokens": settings.AI_PARSER_MAX_TOKENS,
-            "temperature": 0,
-            "chat_template_kwargs": {"enable_thinking": False},
-            "reasoning_format": "none",
-            "response_format": _response_format_schema(),
-        }
-
         try:
             async with httpx.AsyncClient(
                 timeout=settings.AI_PARSER_TIMEOUT_SECONDS
             ) as client:
-                response = await _post_chat_completions(
+                response = await _post_gemini(
                     client,
-                    base_url=settings.AI_SERVER_URL,
-                    headers=headers,
-                    payload=payload,
+                    api_key=settings.GEMINI_API_KEY,
+                    model=settings.GEMINI_MODEL,
+                    system_prompt=_system_prompt(),
+                    user_prompt=_user_prompt(
+                        file_type=file_type,
+                        document_title=document_title,
+                        prepared_pages=prepared,
+                    ),
+                    response_schema=_response_schema(),
+                    max_tokens=settings.AI_PARSER_MAX_TOKENS,
+                    temperature=0,
                 )
                 response.raise_for_status()
             logger.info(
                 "AI parser request ok for %s via %s | prompt_chars=%s | truncated=%s | max_tokens=%s",
                 document_title,
-                settings.AI_SERVER_URL,
+                settings.GEMINI_MODEL,
                 len(prepared),
                 truncated,
                 settings.AI_PARSER_MAX_TOKENS,
@@ -142,7 +127,7 @@ async def infer_document_structure(
     if response is None:
         return AIParseOutcome(diagnostics=["AI parser produced no response"])
 
-    message = _extract_message_content(response.json())
+    message = _extract_gemini_content(response.json())
     if not message:
         logger.warning("AI parser empty content for %s", document_title)
         return AIParseOutcome(diagnostics=["AI parser returned empty content"])
@@ -180,7 +165,6 @@ async def infer_document_structure(
 
 def _system_prompt() -> str:
     return (
-        "/nothink\n"
         "You segment uploaded study documents into chapters or sections. "
         "Return JSON only. Never include markdown fences unless absolutely necessary. "
         "Use only text present in source. Do not invent titles, anchors, or page numbers. "
@@ -235,43 +219,66 @@ Source pages:
 """.strip()
 
 
-def _response_format_schema() -> dict[str, Any]:
+def _response_schema() -> dict[str, Any]:
     return {
-        "type": "json_schema",
-        "schema": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                "review_required": {"type": "boolean"},
-                "warnings": {
-                    "type": "array",
-                    "maxItems": 3,
-                    "items": {"type": "string", "maxLength": 160},
-                },
-                "sections": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 12,
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "title": {
-                                "type": "string",
-                                "minLength": 1,
-                                "maxLength": 255,
-                            },
-                            "page_start": {"type": "integer", "minimum": 1},
-                            "page_end": {"type": "integer", "minimum": 1},
-                        },
-                        "required": ["title", "page_start", "page_end"],
+        "type": "OBJECT",
+        "properties": {
+            "confidence": {"type": "NUMBER"},
+            "review_required": {"type": "BOOLEAN"},
+            "warnings": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "sections": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "title": {"type": "STRING"},
+                        "page_start": {"type": "INTEGER"},
+                        "page_end": {"type": "INTEGER"},
                     },
+                    "required": ["title", "page_start", "page_end"],
                 },
             },
-            "required": ["confidence", "review_required", "warnings", "sections"],
+        },
+        "required": ["confidence", "review_required", "warnings", "sections"],
+    }
+
+
+async def _post_gemini(
+    client: httpx.AsyncClient,
+    *,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    response_schema: dict,
+    max_tokens: int,
+    temperature: float,
+) -> httpx.Response:
+    url = f"{_GEMINI_BASE_URL}/{model}:generateContent"
+    payload = {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema,
         },
     }
+    return await client.post(url, params={"key": api_key}, json=payload)
+
+
+def _extract_gemini_content(payload: dict[str, Any]) -> str:
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return ""
+    parts = (candidates[0].get("content") or {}).get("parts") or []
+    if not parts:
+        return ""
+    return str(parts[0].get("text") or "").strip()
 
 
 def _prepare_pages_payload(
@@ -340,40 +347,13 @@ def _is_context_limit_error(exc: httpx.HTTPStatusError) -> bool:
         detail = exc.response.text.lower()
     except Exception:
         return False
-    return "exceeds the available context size" in detail or "context size" in detail
-
-
-def _extract_message_content(payload: dict[str, Any]) -> str:
-    choices = payload.get("choices") or []
-    if not choices:
-        return ""
-    choice = choices[0] or {}
-    message = choice.get("message") or {}
-    content = message.get("content")
-    reasoning_content = message.get("reasoning_content") or choice.get(
-        "reasoning_content"
+    return (
+        "request payload size exceeds" in detail
+        or "too large" in detail
+        or "exceeds the available context size" in detail
+        or "context size" in detail
+        or ("tokens" in detail and "limit" in detail)
     )
-    if isinstance(content, str):
-        content = content.strip()
-        if content:
-            return content
-    if isinstance(content, list):
-        text_parts = [
-            item.get("text", "") for item in content if isinstance(item, dict)
-        ]
-        merged = "\n".join(part for part in text_parts if part).strip()
-        if merged:
-            return merged
-    if isinstance(reasoning_content, str):
-        return reasoning_content.strip()
-    if isinstance(reasoning_content, list):
-        text_parts = [
-            item.get("text", "") for item in reasoning_content if isinstance(item, dict)
-        ]
-        return "\n".join(part for part in text_parts if part).strip()
-    if isinstance(choice.get("text"), str):
-        return choice.get("text", "").strip()
-    return ""
 
 
 def _parse_ai_response(raw: str, *, page_count: int) -> AIStructureSuggestion | None:
@@ -535,31 +515,3 @@ def _preview_text(value: str, limit: int = 240) -> str:
     if len(compact) <= limit:
         return compact
     return compact[:limit] + "..."
-
-
-async def _post_chat_completions(
-    client: httpx.AsyncClient,
-    *,
-    base_url: str,
-    headers: dict[str, str],
-    payload: dict[str, Any],
-) -> httpx.Response:
-    parsed = urlparse(base_url)
-    base = base_url.rstrip("/")
-    candidate_urls: list[str] = []
-    if parsed.path.endswith("/v1"):
-        candidate_urls.append(f"{base}/chat/completions")
-    elif parsed.path.endswith("/chat/completions"):
-        candidate_urls.append(base)
-    else:
-        candidate_urls.append(f"{base}/v1/chat/completions")
-        candidate_urls.append(f"{base}/chat/completions")
-
-    last_response: httpx.Response | None = None
-    for url in candidate_urls:
-        response = await client.post(url, headers=headers, json=payload)
-        last_response = response
-        if response.status_code != 404:
-            return response
-    assert last_response is not None
-    return last_response
