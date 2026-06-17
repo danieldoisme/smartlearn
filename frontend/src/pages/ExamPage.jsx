@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAvailableStudyChapters } from '@/api/study'
+import { usePreferences } from '@/api/me'
 import {
   useCurrentExam,
   useSaveExamProgress,
@@ -113,6 +114,20 @@ export default function ExamPage() {
   const [configError, setConfigError] = useState('')
   const [partialPool, setPartialPool] = useState(null)
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([])
+
+  const { data: prefs } = usePreferences()
+  const [prefsSeeded, setPrefsSeeded] = useState(false)
+
+  // Seed the exam config defaults from the user's saved learning preferences
+  // once, before an exam starts. The user can still override before launching.
+  if (!prefsSeeded && prefs && !examId) {
+    setPrefsSeeded(true)
+    setConfig((prev) => ({
+      ...prev,
+      questionLimit: prefs.defaultQuestionCount ?? prev.questionLimit,
+      questionType: prefs.preferredQuestionType ?? prev.questionType,
+    }))
+  }
 
   const { data: availableChapters = [], isLoading: chaptersLoading } =
     useAvailableStudyChapters()

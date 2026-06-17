@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
-import { QuestionType, QuestionTypeLabel, SessionType } from '@/models'
+import { QuestionType, QuestionTypeLabel, SessionType, DisplayMode } from '@/models'
+import { usePreferences } from '@/api/me'
 import {
   useBookmarks,
   useCreateBookmark,
@@ -117,15 +118,24 @@ export default function StudyPage() {
   const [sessionId, setSessionId] = useState(null)
   const [questions, setQuestions] = useState([])
   const [currentQ, setCurrentQ] = useState(0)
+  // Per-question state, keyed by question id, so navigating between questions
+  // never wipes a prior answer. `selected`/`fillAnswers` hold in-progress input;
+  // `answers` holds the graded server result for questions already submitted —
+  // a question's presence in `answers` means it is locked (answered).
   const [selected, setSelected] = useState({})
-  const [fillAnswer, setFillAnswer] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [serverResult, setServerResult] = useState(null)
+  const [fillAnswers, setFillAnswers] = useState({})
+  const [answers, setAnswers] = useState({})
   const [showSource, setShowSource] = useState(false)
   const [noteContent, setNoteContent] = useState('')
   const [noteMessage, setNoteMessage] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const [summary, setSummary] = useState(null)
+  const [finishing, setFinishing] = useState(false)
+
+  const { data: prefs } = usePreferences()
+  const revealAnswers =
+    (prefs?.answerDisplayMode || DisplayMode.IMMEDIATE) === DisplayMode.IMMEDIATE
 
   const { data: availableChapters = [], isLoading: availableLoading } =
     useAvailableStudyChapters()
@@ -148,9 +158,10 @@ export default function StudyPage() {
       setQuestions([])
       setCurrentQ(0)
       setSelected({})
-      setFillAnswer('')
-      setSubmitted(false)
-      setServerResult(null)
+      setFillAnswers({})
+      setAnswers({})
+      setSummary(null)
+      setFinishing(false)
     }
   }
 
@@ -172,9 +183,8 @@ export default function StudyPage() {
           if (snap && snap.sessionId === data.sessionId) {
             setCurrentQ(snap.currentQ || 0)
             setSelected(snap.selected || {})
-            setFillAnswer(snap.fillAnswer || '')
-            setSubmitted(Boolean(snap.submitted))
-            setServerResult(snap.serverResult || null)
+            setFillAnswers(snap.fillAnswers || {})
+            setAnswers(snap.answers || {})
           }
         },
       },
@@ -187,11 +197,10 @@ export default function StudyPage() {
       sessionId,
       currentQ,
       selected,
-      fillAnswer,
-      submitted,
-      serverResult,
+      fillAnswers,
+      answers,
     })
-  }, [sessionId, chapterId, sessionType, currentQ, selected, fillAnswer, submitted, serverResult])
+  }, [sessionId, chapterId, sessionType, currentQ, selected, fillAnswers, answers])
 
   // Clear the session snapshot on any exit (SPA nav-away/unmount or tab close /
   // refresh) so a quit session never leaves stale state for the next one. Only
@@ -216,7 +225,14 @@ export default function StudyPage() {
 
   const question = questions[currentQ]
   const totalQ = questions.length
-  const progressPct = totalQ ? ((currentQ + (submitted ? 1 : 0)) / totalQ) * 100 : 0
+  // Locked == this question already submitted/graded. Derived from the per-id
+  // `answers` map so the lock survives navigation in either direction.
+  const currentResult = question ? answers[question.id] ?? null : null
+  const isLocked = Boolean(currentResult)
+  // Reveal correctness only when answered AND the mode shows it immediately;
+  // "Cuối phiên" keeps everything hidden until the end-of-session summary.
+  const revealCurrent = isLocked && revealAnswers
+  const progressPct = totalQ ? ((currentQ + (isLocked ? 1 : 0)) / totalQ) * 100 : 0
   const activeChapter = useMemo(
     () => availableChapters.find((chapter) => chapter.chapterId === chapterId) || null,
     [availableChapters, chapterId],
@@ -240,9 +256,9 @@ export default function StudyPage() {
   const citationHref = question ? buildCitationHref(question) : null
 
   const correctLabelSet = useMemo(() => {
-    if (!serverResult?.correctLabel) return new Set()
-    return new Set(serverResult.correctLabel.split(',').map((s) => s.trim()))
-  }, [serverResult])
+    if (!currentResult?.correctLabel) return new Set()
+    return new Set(currentResult.correctLabel.split(',').map((s) => s.trim()))
+  }, [currentResult])
 
   if (chapterId == null) {
     return (
@@ -423,6 +439,55 @@ export default function StudyPage() {
     )
   }
 
+  if (summary) {
+    const total = summary.totalQuestions || totalQ || 0
+    const correct = summary.correctCount || 0
+    const pct = total ? Math.round((correct / total) * 100) : 0
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-2xl mx-auto py-10"
+      >
+        <Card className="p-8">
+          <CardContent className="text-center space-y-5">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 mx-auto">
+              <CheckCircle2 className="h-7 w-7 text-primary-600" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-slate-900">Hoàn thành phiên học</h1>
+              <p className="text-sm text-slate-500">
+                {sessionType === SessionType.REVIEW
+                  ? 'Bạn đã ôn xong các câu sai trong phiên này.'
+                  : 'Kết quả tổng quan của phiên học vừa rồi.'}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-8 py-2">
+              <div>
+                <p className="text-3xl font-bold text-primary-600">{correct}/{total}</p>
+                <p className="text-xs text-slate-500 mt-1">Câu đúng</p>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-slate-900">{pct}%</p>
+                <p className="text-xs text-slate-500 mt-1">Tỷ lệ chính xác</p>
+              </div>
+            </div>
+            <Progress value={pct} className="h-2" />
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button onClick={() => navigate('/progress')}>Xem tiến độ</Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate(sessionType === SessionType.REVIEW ? '/review' : '/study')}
+              >
+                {sessionType === SessionType.REVIEW ? 'Về trang ôn tập' : 'Học chương khác'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+
   if (startMut.isPending || (!sessionId && !startMut.isError)) {
     return (
       <div className="max-w-3xl mx-auto py-16 text-center text-slate-500">
@@ -454,7 +519,7 @@ export default function StudyPage() {
   }
 
   const handleSelect = (label) => {
-    if (submitted) return
+    if (isLocked) return
     if (question.questionType === QuestionType.MULTI) {
       setSelected((prev) => {
         const current = prev[question.id] || []
@@ -471,7 +536,9 @@ export default function StudyPage() {
   }
 
   const buildSelectedAnswer = () => {
-    if (question.questionType === QuestionType.FILL) return fillAnswer.trim() || null
+    if (question.questionType === QuestionType.FILL) {
+      return (fillAnswers[question.id] || '').trim() || null
+    }
     if (question.questionType === QuestionType.MULTI) {
       const labels = selected[question.id] || []
       return labels.length ? toMultiWire(labels) : null
@@ -480,6 +547,8 @@ export default function StudyPage() {
   }
 
   const handleSubmit = async () => {
+    if (isLocked) return // strict lock — an answered question can never be re-submitted
+    if (submitMut.isPending || finishing) return // guard rapid double-clicks
     const selectedAnswer = buildSelectedAnswer()
     if (!selectedAnswer) return
     try {
@@ -488,25 +557,36 @@ export default function StudyPage() {
         selectedAnswer,
         isSkipped: false,
       })
-      setServerResult(res)
-      setSubmitted(true)
-    } catch {
-      // Leave state unchanged; user can retry
+      // Record the graded result keyed by question id — this both locks the
+      // question and drives the reveal, surviving any later navigation.
+      setAnswers((prev) => ({ ...prev, [question.id]: res }))
+      // "Cuối phiên" mode hides feedback, so advance straight to the next one.
+      if (!revealAnswers) await goNext()
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        // Server already stored an answer for this question (e.g. a stale
+        // retry). Lock it with whatever we know so the user is never stuck.
+        setAnswers((prev) => ({
+          ...prev,
+          [question.id]: prev[question.id] || { isCorrect: false },
+        }))
+        if (!revealAnswers) await goNext()
+      }
+      // Other errors: leave state unchanged; user can retry.
     }
   }
 
-  const userIsCorrect = () => serverResult?.isCorrect === true
+  const userIsCorrect = () => currentResult?.isCorrect === true
 
   const optionIsCorrect = (opt) => {
-    if (!submitted || !serverResult) return null
+    if (!revealCurrent) return null
     return correctLabelSet.has(opt.label)
   }
 
-  const resetForNext = () => {
-    setSubmitted(false)
+  // Only view-local UI is reset on navigation; per-question answer state lives
+  // in the keyed maps and must persist as the user moves between questions.
+  const resetView = () => {
     setShowSource(false)
-    setFillAnswer('')
-    setServerResult(null)
     setNoteContent('')
     setNoteMessage('')
   }
@@ -514,25 +594,34 @@ export default function StudyPage() {
   const goNext = async () => {
     if (currentQ < totalQ - 1) {
       setCurrentQ(currentQ + 1)
-      resetForNext()
+      resetView()
     } else {
+      if (finishing) return
+      setFinishing(true)
+      let result = null
       if (sessionId) {
         try {
-          await completeMut.mutateAsync(sessionId)
+          result = await completeMut.mutateAsync(sessionId)
         } catch {
-          // ignore completion error — still navigate
+          // ignore completion error — still finish
         }
       }
       clearSnapshot(sessionType, chapterId)
-      navigate(sessionType === SessionType.REVIEW ? '/review' : '/progress')
+      if (revealAnswers) {
+        navigate(sessionType === SessionType.REVIEW ? '/review' : '/progress')
+      } else {
+        // "Cuối phiên": answers were hidden the whole session, so render the
+        // score summary in-page instead of silently redirecting.
+        setSummary(result || { totalQuestions: totalQ, correctCount: 0 })
+        setFinishing(false)
+      }
     }
   }
 
   const goPrev = () => {
-    if (currentQ > 0) {
-      setCurrentQ(currentQ - 1)
-      resetForNext()
-    }
+    if (currentQ === 0) return
+    setCurrentQ(currentQ - 1)
+    resetView()
   }
 
   const toggleBookmark = async () => {
@@ -621,9 +710,9 @@ export default function StudyPage() {
                   <button
                     key={opt.label}
                     onClick={() => handleSelect(opt.label)}
-                    disabled={submitted}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all cursor-pointer ${
-                      submitted
+                    disabled={isLocked}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all ${isLocked ? 'cursor-default' : 'cursor-pointer'} ${
+                      revealCurrent
                         ? correct
                           ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
                           : isSelected
@@ -639,7 +728,7 @@ export default function StudyPage() {
                         ? 'rounded-md'
                         : 'rounded-full'
                     } ${
-                      submitted
+                      revealCurrent
                         ? correct
                           ? 'border-emerald-500 bg-emerald-100 text-emerald-700'
                           : isSelected
@@ -649,13 +738,13 @@ export default function StudyPage() {
                           ? 'border-primary-500 bg-primary-100 text-primary-700'
                           : 'border-slate-300 bg-white text-transparent'
                     }`}>
-                      <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${isSelected || (submitted && correct) ? '' : 'opacity-0'}`}>
+                      <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${isSelected || (revealCurrent && correct) ? '' : 'opacity-0'}`}>
                         {question.questionType === QuestionType.MULTI ? '✓' : ''}
                       </span>
                     </span>
                     <span className="flex-1 vn-text">{opt.content}</span>
-                    {submitted && correct && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-                    {submitted && isSelected && !correct && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                    {revealCurrent && correct && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                    {revealCurrent && isSelected && !correct && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                   </button>
                 )
               })}
@@ -668,42 +757,25 @@ export default function StudyPage() {
                 id="answer-input"
                 name="answer-input"
                 type="text"
-                value={fillAnswer}
-                onChange={(e) => setFillAnswer(e.target.value)}
-                disabled={submitted}
+                value={fillAnswers[question.id] || ''}
+                onChange={(e) =>
+                  setFillAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))
+                }
+                disabled={isLocked}
                 placeholder="Nhập đáp án..."
-                className="glass-input w-full h-11 px-4 text-sm text-slate-800 placeholder:text-slate-400"
+                className="glass-input w-full h-11 px-4 text-sm text-slate-800 placeholder:text-slate-400 disabled:opacity-100 disabled:cursor-default"
               />
-              {submitted && (
+              {revealCurrent && (
                 <p className={`text-sm ${userIsCorrect() ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {userIsCorrect() ? '✓ Chính xác!' : `✗ Đáp án đúng: ${serverResult?.correctAnswer ?? ''}`}
+                  {userIsCorrect() ? '✓ Chính xác!' : `✗ Đáp án đúng: ${currentResult?.correctAnswer ?? ''}`}
                 </p>
               )}
             </div>
           )}
-
-          {submitted && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-4 rounded-xl ${userIsCorrect() ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                {userIsCorrect() ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-500" />
-                )}
-                <span className={`text-sm font-medium ${userIsCorrect() ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {userIsCorrect() ? 'Chính xác!' : 'Chưa đúng'}
-                </span>
-              </div>
-            </motion.div>
-          )}
         </CardContent>
       </Card>
 
-      {submitted && (question.sourcePage || question.sourceContext || question.sourceText) && (
+      {revealCurrent && (question.sourcePage || question.sourceContext || question.sourceText) && (
         <AnimatePresence>
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
             <button
@@ -775,26 +847,34 @@ export default function StudyPage() {
       )}
 
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={goPrev} disabled={currentQ === 0}>
+        <Button
+          variant="ghost"
+          onClick={goPrev}
+          disabled={currentQ === 0 || submitMut.isPending || finishing}
+        >
           <ChevronLeft className="h-4 w-4" />
           Câu trước
         </Button>
         <div className="flex gap-2">
-          {!submitted ? (
+          {!isLocked ? (
             <>
-              <Button variant="outline" onClick={goNext}>
+              <Button
+                variant="outline"
+                onClick={goNext}
+                disabled={submitMut.isPending || finishing}
+              >
                 <SkipForward className="h-4 w-4" />
                 Bỏ qua
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={submitMut.isPending || (!selected[question.id] && !fillAnswer)}
+                disabled={submitMut.isPending || finishing || !buildSelectedAnswer()}
               >
                 {submitMut.isPending ? 'Đang gửi...' : 'Xác nhận'}
               </Button>
             </>
           ) : (
-            <Button onClick={goNext} disabled={completeMut.isPending}>
+            <Button onClick={goNext} disabled={completeMut.isPending || finishing}>
               {currentQ < totalQ - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
               <ChevronRight className="h-4 w-4" />
             </Button>

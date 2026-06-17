@@ -1024,7 +1024,10 @@ def _salvage_truncated_questions(text: str) -> dict[str, Any] | None:
             break
     if not questions:
         return None
-    return {"warnings": ["AI output truncated; recovered partial questions."], "questions": questions}
+    return {
+        "warnings": ["AI output truncated; recovered partial questions."],
+        "questions": questions,
+    }
 
 
 def _extract_balanced_json_object(text: str) -> str | None:
