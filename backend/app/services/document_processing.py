@@ -10,6 +10,7 @@ from zipfile import BadZipFile, ZipFile
 
 from backend.app.models.enums import FileType
 from backend.app.services.ai_document_parsing import infer_document_structure
+from backend.app.services.text_cleaning import clean_pages, clean_section_text
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 _UPLOAD_ROOT = Path("backend/uploads")
@@ -60,7 +61,7 @@ def store_uploaded_file(user_id: int, file_name: str, content: bytes) -> str:
 async def parse_document(
     file_type: FileType, content: bytes, title: str
 ) -> ParseDocumentResult:
-    pages = _extract_pages(file_type, content)
+    pages = clean_pages(_extract_pages(file_type, content))
     if pages:
         ai_outcome = await infer_document_structure(
             file_type=file_type,
@@ -277,7 +278,7 @@ def split_into_chapters(
         out.append(
             {
                 "title": section["title"][:255] or document_title or "Phần",
-                "content_text": section["content_text"],
+                "content_text": clean_section_text(section["content_text"]),
                 "page_start": section.get("page_start"),
                 "page_end": section.get("page_end"),
             }
@@ -405,7 +406,7 @@ def _parse_docx_sections(content: bytes, document_title: str) -> list[dict]:
         )
 
     cleaned = [
-        section
+        {**section, "content_text": clean_section_text(section["content_text"])}
         for section in sections
         if section["title"].strip() or section["content_text"].strip()
     ]
@@ -815,9 +816,7 @@ def _map_normalized_index(original: str, normalized: str, target_index: int) -> 
 
 
 def _normalize_section_text(value: str) -> str:
-    return "\n".join(
-        line.strip() for line in value.splitlines() if line.strip()
-    ).strip()
+    return clean_section_text(value)
 
 
 def _dedupe_sections(sections: list[dict]) -> list[dict]:

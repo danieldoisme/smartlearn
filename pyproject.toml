@@ -20,3 +20,14 @@ dependencies = [
     "python-multipart>=0.0.20",
     "pypdf>=5.1.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.21.1",
+]

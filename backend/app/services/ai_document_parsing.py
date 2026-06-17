@@ -8,6 +8,11 @@ import httpx
 
 from backend.app.config import settings
 from backend.app.models.enums import FileType
+from backend.app.services.text_cleaning import (
+    chapter_marker,
+    detect_toc_pages,
+    is_heading_line,
+)
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -48,6 +53,21 @@ async def infer_document_structure(
     if not pages:
         return AIParseOutcome(diagnostics=["No pages extracted for AI parser"])
 
+    if settings.AI_PARSER_LONGDOC_MODE:
+        return await _infer_longdoc(
+            file_type=file_type, document_title=document_title, pages=pages
+        )
+    return await _infer_full_text(
+        file_type=file_type, document_title=document_title, pages=pages
+    )
+
+
+async def _infer_full_text(
+    *,
+    file_type: FileType,
+    document_title: str,
+    pages: list[str],
+) -> AIParseOutcome:
     max_chars = settings.AI_PARSER_MAX_CHARS
     max_input_tokens = settings.AI_PARSER_MAX_INPUT_TOKENS
     truncated_any = False
@@ -171,6 +191,298 @@ async def infer_document_structure(
         ", ".join(section.title for section in suggestion.sections[:5]),
     )
     return AIParseOutcome(suggestion=suggestion)
+
+
+async def _infer_longdoc(
+    *,
+    file_type: FileType,
+    document_title: str,
+    pages: list[str],
+) -> AIParseOutcome:
+    """Long-doc strategy: compress pages to heading candidates so the whole
+    document fits the budget in one call. Window only when even the compressed
+    payload overflows. Page markers stay absolute, so windowed sections need no
+    renumbering — only seam dedupe on merge.
+    """
+    # Prefer explicit chapter markers ("Chương N"). They give chapter-level
+    # granularity deterministically and avoid the over-segmentation that windowed
+    # AI inference produces when it only sees subsection headings.
+    chapter_sections = _detect_chapter_boundaries(pages)
+    if chapter_sections:
+        return AIParseOutcome(
+            suggestion=AIStructureSuggestion(
+                sections=chapter_sections,
+                confidence=0.95,
+                review_required=False,
+                warnings=[],
+            )
+        )
+
+    context_lines = settings.AI_PARSER_CANDIDATE_CONTEXT_LINES
+    items = [(index + 1, page) for index, page in enumerate(pages)]
+    payload = _build_candidate_payload(items, context_lines=context_lines)
+
+    if _fits_budget(payload):
+        suggestion, diagnostics = await _request_structure(
+            file_type=file_type,
+            document_title=document_title,
+            prepared_pages=payload,
+            page_count=len(pages),
+        )
+        if suggestion is not None:
+            return AIParseOutcome(suggestion=suggestion)
+        return AIParseOutcome(diagnostics=diagnostics)
+
+    return await _infer_windowed(
+        file_type=file_type,
+        document_title=document_title,
+        pages=pages,
+        context_lines=context_lines,
+    )
+
+
+def _detect_chapter_boundaries(pages: list[str]) -> list[AISectionBoundary]:
+    """Deterministically segment by explicit chapter markers.
+
+    Returns chapter-level boundaries when the document has >=2 distinct chapter
+    numbers, else [] (caller falls back to AI inference). Robust to chapter titles
+    repeated in running headers: only the earliest non-TOC page of each chapter
+    number is taken as that chapter's start.
+    """
+    toc_pages = detect_toc_pages(pages)
+    earliest: dict[int, tuple[int, str]] = {}
+    for index, page in enumerate(pages):
+        if index in toc_pages:
+            continue
+        lines = [line for line in page.splitlines() if line.strip()]
+        for position, line in enumerate(lines):
+            marker = chapter_marker(line)
+            if marker is None:
+                continue
+            number, title = marker
+            title = _enrich_chapter_title(title, lines, position)
+            if number not in earliest:
+                earliest[number] = (index + 1, title)
+            break  # first chapter heading on the page is enough
+
+    if len(earliest) < 2:
+        return []
+
+    ordered = sorted(earliest.items(), key=lambda item: item[1][0])
+    boundaries: list[AISectionBoundary] = []
+    for position, (_number, (page_start, title)) in enumerate(ordered):
+        next_start = (
+            ordered[position + 1][1][0] if position + 1 < len(ordered) else None
+        )
+        page_end = (next_start - 1) if next_start is not None else len(pages)
+        boundaries.append(
+            AISectionBoundary(
+                title=title[:255],
+                page_start=page_start,
+                page_end=max(page_end, page_start),
+            )
+        )
+    return boundaries
+
+
+def _enrich_chapter_title(title: str, lines: list[str], position: int) -> str:
+    """Append the continuation line when the heading is just the marker.
+
+    PDF extraction often puts "Chương 1" on its own line with the descriptive
+    title ("Biến cố và xác suất...") on the next line. Merge them so chapters
+    carry meaningful titles.
+    """
+    # Text after the chapter number on the heading line itself.
+    remainder = re.sub(
+        r"^\s*(chương|chapter|phần)\s+(\d{1,3}|[ivxlcdm]{1,7})\b[.:)\-\s]*",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+    if len(remainder) >= 4:
+        return title
+    if position + 1 < len(lines):
+        continuation = lines[position + 1].strip()
+        if continuation and not is_heading_line(continuation):
+            merged = f"{title} {continuation}".strip()
+            return merged[:255]
+    return title
+
+
+async def _infer_windowed(
+    *,
+    file_type: FileType,
+    document_title: str,
+    pages: list[str],
+    context_lines: int,
+) -> AIParseOutcome:
+    windows = _build_candidate_windows(pages, context_lines=context_lines)
+    merged: list[AISectionBoundary] = []
+    diagnostics: list[str] = []
+    confidences: list[float] = []
+    succeeded = 0
+
+    for payload in windows:
+        suggestion, window_diag = await _request_structure(
+            file_type=file_type,
+            document_title=document_title,
+            prepared_pages=payload,
+            page_count=len(pages),
+        )
+        if suggestion is None:
+            diagnostics.extend(window_diag)
+            continue
+        succeeded += 1
+        merged.extend(suggestion.sections)
+        if suggestion.confidence is not None:
+            confidences.append(suggestion.confidence)
+
+    if not merged:
+        diagnostics.insert(0, "Windowed AI parser produced no usable sections")
+        return AIParseOutcome(diagnostics=_dedupe_preserve_order(diagnostics))
+
+    sections = _merge_section_boundaries(merged)
+    confidence = min(confidences) if confidences else None
+    warnings = ["Long document parsed in windows; review boundaries"]
+    if succeeded < len(windows):
+        warnings.append("Some document windows failed AI parsing")
+    return AIParseOutcome(
+        suggestion=AIStructureSuggestion(
+            sections=sections,
+            confidence=confidence,
+            review_required=True,
+            warnings=warnings,
+        )
+    )
+
+
+async def _request_structure(
+    *,
+    file_type: FileType,
+    document_title: str,
+    prepared_pages: str,
+    page_count: int,
+) -> tuple[AIStructureSuggestion | None, list[str]]:
+    """Single Gemini structure call for an already-budgeted payload."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=settings.AI_PARSER_TIMEOUT_SECONDS
+        ) as client:
+            response = await _post_gemini(
+                client,
+                api_key=settings.GEMINI_API_KEY,
+                model=settings.GEMINI_MODEL,
+                system_prompt=_system_prompt(),
+                user_prompt=_user_prompt(
+                    file_type=file_type,
+                    document_title=document_title,
+                    prepared_pages=prepared_pages,
+                ),
+                response_schema=_response_schema(),
+                max_tokens=settings.AI_PARSER_MAX_TOKENS,
+                temperature=0,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 0
+        if status_code == 429:
+            return None, ["AI parser rate-limited by provider. Try again later."]
+        return None, [f"AI parser HTTP error ({status_code})"]
+    except httpx.TimeoutException:
+        return None, ["AI parser timed out. Try again later."]
+    except httpx.RequestError:
+        return None, ["AI parser request error"]
+
+    message = _extract_gemini_content(response.json())
+    if not message:
+        return None, ["AI parser returned empty content"]
+    suggestion = _parse_ai_response(message, page_count=page_count)
+    if suggestion is None:
+        return None, ["AI parser returned unusable structured output"]
+    return suggestion, []
+
+
+def _build_candidate_payload(
+    items: list[tuple[int, str]], *, context_lines: int
+) -> str:
+    parts: list[str] = []
+    for page_number, page in items:
+        compressed = _compress_page_to_candidates(page, context_lines=context_lines)
+        parts.append(f"[[PAGE {page_number}]]\n{compressed}".rstrip())
+    return "\n\n".join(parts)
+
+
+def _build_candidate_windows(pages: list[str], *, context_lines: int) -> list[str]:
+    """Split pages into windows whose compressed payload each fits the budget.
+    Markers stay absolute so the merge step needs no page renumbering.
+    """
+    windows: list[str] = []
+    current: list[tuple[int, str]] = []
+    for index, page in enumerate(pages):
+        candidate = current + [(index + 1, page)]
+        if current and not _fits_budget(
+            _build_candidate_payload(candidate, context_lines=context_lines)
+        ):
+            windows.append(
+                _build_candidate_payload(current, context_lines=context_lines)
+            )
+            current = [(index + 1, page)]
+        else:
+            current = candidate
+    if current:
+        windows.append(_build_candidate_payload(current, context_lines=context_lines))
+    return windows
+
+
+def _compress_page_to_candidates(page: str, *, context_lines: int) -> str:
+    lines = [line for line in page.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    keep: set[int] = set()
+    for index, line in enumerate(lines):
+        if is_heading_line(line):
+            for offset in range(-context_lines, context_lines + 1):
+                neighbor = index + offset
+                if 0 <= neighbor < len(lines):
+                    keep.add(neighbor)
+    if not keep:
+        # No heading on this page: keep the first line as a positional anchor so
+        # the AI still knows the page exists and roughly what it contains.
+        keep.add(0)
+    return "\n".join(lines[index] for index in sorted(keep))
+
+
+def _merge_section_boundaries(
+    boundaries: list[AISectionBoundary],
+) -> list[AISectionBoundary]:
+    boundaries = sorted(
+        boundaries,
+        key=lambda b: (b.page_start or 10**9, b.page_end or 10**9, b.title.lower()),
+    )
+    merged: list[AISectionBoundary] = []
+    seen: set[tuple[str, int | None, int | None]] = set()
+    for boundary in boundaries:
+        key = (boundary.title.strip().lower(), boundary.page_start, boundary.page_end)
+        if key in seen:
+            continue
+        # Seam dedupe: drop a boundary that starts on the same page as the
+        # previous one with the same title (window overlap artifact).
+        if (
+            merged
+            and merged[-1].page_start == boundary.page_start
+            and (merged[-1].title.strip().lower() == boundary.title.strip().lower())
+        ):
+            continue
+        seen.add(key)
+        merged.append(boundary)
+    return merged
+
+
+def _fits_budget(text: str) -> bool:
+    return (
+        len(text) <= settings.AI_PARSER_MAX_CHARS
+        and _estimate_tokens(text) <= settings.AI_PARSER_MAX_INPUT_TOKENS
+    )
 
 
 def _system_prompt() -> str:

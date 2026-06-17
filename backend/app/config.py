@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     AI_PARSER_MAX_INPUT_TOKENS: int = 8500
     AI_PARSER_MAX_TOKENS: int = 4000
     AI_PARSER_MIN_CONFIDENCE: float = 0.45
+    # When ON, long documents are compressed to heading candidates so the whole
+    # document fits the parser budget in one call (no silent tail truncation).
+    # Falls back to windowed multi-call inference when even the compressed
+    # payload overflows the budget. Set OFF to restore the legacy clip behavior.
+    AI_PARSER_LONGDOC_MODE: bool = True
+    # Number of context lines kept around each heading candidate to preserve
+    # boundary-inference recall.
+    AI_PARSER_CANDIDATE_CONTEXT_LINES: int = 2
 
     AQG_TIMEOUT_SECONDS: float = 240.0
     AQG_MAX_TOKENS: int = 8192
