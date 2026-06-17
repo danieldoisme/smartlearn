@@ -782,8 +782,10 @@ export default function DocumentDetailPage() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Nội dung câu hỏi</label>
+              <label htmlFor="edit-question-content" className="block text-xs font-medium text-slate-600 mb-1">Nội dung câu hỏi</label>
               <textarea
+                id="edit-question-content"
+                name="edit-question-content"
                 value={editDraft.content}
                 onChange={(e) => setEditDraft((d) => ({ ...d, content: e.target.value }))}
                 rows={4}
@@ -792,8 +794,10 @@ export default function DocumentDetailPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Đáp án đúng</label>
+              <label htmlFor="edit-question-correct-answer" className="block text-xs font-medium text-slate-600 mb-1">Đáp án đúng</label>
               <Input
+                id="edit-question-correct-answer"
+                name="edit-question-correct-answer"
                 value={editDraft.correctAnswer}
                 onChange={(e) => setEditDraft((d) => ({ ...d, correctAnswer: e.target.value }))}
                 placeholder="Nhập đáp án đúng"
@@ -802,12 +806,15 @@ export default function DocumentDetailPage() {
 
             {editingQuestion && editingQuestion.options.length > 0 && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-2">Các lựa chọn</label>
-                <div className="space-y-2">
+                <span id="edit-options-label" className="block text-xs font-medium text-slate-600 mb-2">Các lựa chọn</span>
+                <div className="space-y-2" role="group" aria-labelledby="edit-options-label">
                   {editDraft.options.map((opt, i) => (
                     <div key={opt.label} className="flex items-center gap-2">
                       <span className="text-xs font-mono text-slate-500 w-5 shrink-0">{opt.label}</span>
                       <Input
+                        id={`edit-option-${opt.label}`}
+                        name={`edit-option-${opt.label}`}
+                        aria-label={`Lựa chọn ${opt.label}`}
                         value={opt.content}
                         onChange={(e) =>
                           setEditDraft((d) => ({
