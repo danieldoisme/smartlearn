@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -120,6 +120,7 @@ export default function ExamPage() {
   const startMut = useStartExam()
   const submitMut = useSubmitExam()
   const saveProgress = useSaveExamProgress()
+  const submittedRef = useRef(false)
 
   const loadExamSession = useCallback((session) => {
     const snapshot = readSnapshot(session.examId)
@@ -136,6 +137,7 @@ export default function ExamPage() {
   useEffect(() => {
     if (!currentExam) return
     if (examId) return
+    if (submittedRef.current) return
     const timer = setTimeout(() => {
       loadExamSession(currentExam)
     }, 0)
@@ -162,7 +164,8 @@ export default function ExamPage() {
   }, [examId, isPaused])
 
   const submitExam = useCallback(async () => {
-    if (!examId || submitMut.isPending) return
+    if (!examId || submitMut.isPending || submittedRef.current) return
+    submittedRef.current = true
     await saveProgress.mutateAsync({ examId, answers, isPaused: false })
     await submitMut.mutateAsync({ examId, answers })
     clearSnapshot(examId)

@@ -46,6 +46,9 @@ export default function LoginPage() {
     setResetMessage('')
     setPassword('')
     setConfirmPassword('')
+    loginMutation.reset()
+    registerMutation.reset()
+    requestResetMutation.reset()
   }
 
   const handleSubmit = (e) => {

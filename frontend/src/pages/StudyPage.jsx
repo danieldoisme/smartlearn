@@ -139,9 +139,26 @@ export default function StudyPage() {
 
   const startStatus = startMut.status
 
+  const [prevChapterKey, setPrevChapterKey] = useState(null)
+  const chapterKey = `${chapterId}:${sessionType}`
+
+  if (chapterKey !== prevChapterKey) {
+    setPrevChapterKey(chapterKey)
+    if (prevChapterKey !== null) {
+      startMut.reset()
+      setSessionId(null)
+      setQuestions([])
+      setCurrentQ(0)
+      setSelected({})
+      setFillAnswer('')
+      setSubmitted(false)
+      setServerResult(null)
+    }
+  }
+
   useEffect(() => {
     if (chapterId == null) return
-    if (startStatus !== 'idle') return
+    if (startMut.status !== 'idle') return
     startMut.mutate(
       {
         chapterId,
@@ -164,7 +181,7 @@ export default function StudyPage() {
         },
       },
     )
-  }, [chapterId, reviewQuestionIds, sessionType, startStatus, startMut])
+  }, [chapterId, reviewQuestionIds, sessionType, startMut])
 
   useEffect(() => {
     if (!sessionId || chapterId == null) return
