@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import logging
 import re
 import unicodedata
@@ -49,7 +50,22 @@ def detect_file_type(file_name: str) -> FileType:
     raise ValueError("Unsupported file type")
 
 
-def store_uploaded_file(user_id: int, file_name: str, content: bytes) -> str:
+def compute_file_hash(content: bytes) -> str:
+    """SHA-256 hex digest of the raw file bytes for content-based dedup."""
+    return hashlib.sha256(content).hexdigest()
+
+
+def store_uploaded_file(
+    user_id: int,
+    file_name: str,
+    content: bytes,
+    *,
+    reuse_path: str | None = None,
+) -> str:
+    # Content already physically stored elsewhere (same hash) — point at it
+    # instead of writing a redundant copy to disk.
+    if reuse_path and Path(reuse_path).exists():
+        return reuse_path
     safe_name = _sanitize_filename(file_name)
     user_dir = _UPLOAD_ROOT / f"user_{user_id}"
     user_dir.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,13 @@
 from datetime import datetime, timezone
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Integer, DateTime, Enum as SAEnum, ForeignKey
+from sqlalchemy import (
+    String,
+    Integer,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.database import Base
@@ -35,6 +42,9 @@ class Topic(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("user_id", "file_hash", name="uq_documents_user_file_hash"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -49,6 +59,9 @@ class Document(Base):
         SAEnum(FileType, values_callable=_enum_values), nullable=False
     )
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )

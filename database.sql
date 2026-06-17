@@ -52,8 +52,11 @@ CREATE TABLE IF NOT EXISTS documents (
   file_path VARCHAR(500) NOT NULL,
   file_type ENUM('pdf', 'docx') NOT NULL,
   file_size INT NOT NULL,
+  file_hash CHAR(64) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX ix_documents_file_hash (file_hash),
+  UNIQUE KEY uq_documents_user_file_hash (user_id, file_hash),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE SET NULL
 );

@@ -19,6 +19,7 @@ from backend.app.models.quiz import (
 )
 from backend.app.services.document_processing import (
     MAX_UPLOAD_BYTES,
+    compute_file_hash,
     decode_base64_payload,
     detect_file_type,
     parse_document,
@@ -279,11 +280,36 @@ async def create_document(
 ):
     file_bytes, file_type, title = _decode_upload(payload)
 
+    file_hash = compute_file_hash(file_bytes)
+
+    # Content-based dedup: this user already has this exact file. Reuse the
+    # existing document — skip physical storage and expensive AI parsing.
+    existing_for_user = (
+        await db.execute(
+            select(Document)
+            .where(Document.user_id == current.id)
+            .where(Document.file_hash == file_hash)
+        )
+    ).scalar_one_or_none()
+    if existing_for_user is not None:
+        result = DocumentOut.model_validate(existing_for_user)
+        result.deduplicated = True
+        return result
+
     topic_id = await _resolve_topic(
         db, current.id, payload.topic_id, payload.topic_name
     )
 
-    stored_path = store_uploaded_file(current.id, payload.file_name, file_bytes)
+    # Same content already stored by another user — reuse the physical file on
+    # disk instead of writing a redundant copy.
+    existing_path = (
+        await db.execute(
+            select(Document.file_path).where(Document.file_hash == file_hash).limit(1)
+        )
+    ).scalar_one_or_none()
+    stored_path = store_uploaded_file(
+        current.id, payload.file_name, file_bytes, reuse_path=existing_path
+    )
     if payload.chapters:
         sections = [
             {
@@ -305,6 +331,7 @@ async def create_document(
         file_path=stored_path,
         file_type=file_type,
         file_size=len(file_bytes),
+        file_hash=file_hash,
     )
     db.add(document)
     await db.flush()

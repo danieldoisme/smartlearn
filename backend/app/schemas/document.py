@@ -15,8 +15,12 @@ class DocumentOut(CamelModel):
     file_path: str
     file_type: FileType
     file_size: int
+    file_hash: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # True when this upload matched an existing document and was reused
+    # instead of being re-stored and re-parsed.
+    deduplicated: bool = False
 
 
 class ChapterStructureIn(CamelModel):
