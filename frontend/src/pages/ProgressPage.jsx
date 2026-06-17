@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { cloneElement, memo, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart,
@@ -7,7 +7,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   AreaChart,
   Area,
 } from 'recharts'
@@ -36,7 +35,9 @@ import {
   useDocumentProgressDetail,
 } from '@/api/progress'
 
-const CustomTooltip = ({ active, payload, label }) => {
+const FADE_IN = { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
+
+const CustomTooltip = memo(function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white rounded-lg px-3 py-2 text-xs shadow-lg border border-slate-200">
@@ -48,16 +49,43 @@ const CustomTooltip = ({ active, payload, label }) => {
       ))}
     </div>
   )
-}
+})
 
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-}
-const item = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0 },
-}
+const CHART_HEIGHT = 240
+
+const ChartContainer = memo(function ChartContainer({ children }) {
+  const ref = useRef(null)
+  const [size, setSize] = useState(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      if (width > 0 && height > 0) {
+        setSize({ width: Math.floor(width), height: Math.floor(height) })
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative', width: '100%', height: CHART_HEIGHT, overflow: 'hidden' }}>
+      {size && cloneElement(children, { width: size.width, height: size.height })}
+    </div>
+  )
+})
+
+const accuracyGradientDef = (
+  <defs>
+    <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+    </linearGradient>
+  </defs>
+)
+
+const xAxisProps = { tick: { fill: '#64748b', fontSize: 12 }, axisLine: false, tickLine: false }
+const yAxisProps = { tick: { fill: '#64748b', fontSize: 12 }, axisLine: false, tickLine: false }
 
 function todayString() {
   return new Date().toISOString().slice(0, 10)
@@ -69,7 +97,7 @@ function daysAgoString(days) {
   return d.toISOString().slice(0, 10)
 }
 
-function DocumentDetailPanel({ documentId, range }) {
+const DocumentDetailPanel = memo(function DocumentDetailPanel({ documentId, range }) {
   const { data, isLoading } = useDocumentProgressDetail(documentId, range, true)
 
   if (isLoading) {
@@ -135,7 +163,77 @@ function DocumentDetailPanel({ documentId, range }) {
       ))}
     </div>
   )
-}
+})
+
+const DocumentRow = memo(function DocumentRow({ doc, isExpanded, onToggle, range }) {
+  return (
+    <Card className="p-5">
+      <CardContent>
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0 mt-0.5">
+            <FileText className="h-5 w-5 text-primary-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-slate-800">{doc.title}</h3>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock className="h-3 w-3" />
+                  {doc.lastStudied || '—'}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onToggle}
+                >
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mb-3">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Chương</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={doc.chapterCount ? (doc.chaptersCompleted / doc.chapterCount) * 100 : 0} className="flex-1 h-1.5" />
+                  <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapterCount}</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Câu hỏi</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={doc.questionCount ? (doc.answeredCount / doc.questionCount) * 100 : 0} className="flex-1 h-1.5" />
+                  <span className="text-xs text-slate-600">{doc.answeredCount}/{doc.questionCount}</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Độ chính xác</p>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className={`h-3.5 w-3.5 ${doc.accuracy >= 75 ? 'text-emerald-500' : doc.accuracy >= 60 ? 'text-amber-500' : 'text-red-500'}`} />
+                  <span className={`text-sm font-medium ${doc.accuracy >= 75 ? 'text-emerald-600' : doc.accuracy >= 60 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {doc.accuracy}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {isExpanded && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <DocumentDetailPanel documentId={doc.id} range={range} />
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+})
 
 export default function ProgressPage() {
   const [range, setRange] = useState({
@@ -208,13 +306,13 @@ export default function ProgressPage() {
   const isLoading = wLoading || aLoading || dLoading
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
-      <motion.div variants={item}>
+    <motion.div {...FADE_IN} className="space-y-6 max-w-6xl">
+      <div>
         <h1 className="text-2xl font-bold text-slate-900">Tiến độ học tập</h1>
         <p className="text-slate-500 text-sm mt-1">Theo dõi kết quả và xu hướng</p>
-      </motion.div>
+      </div>
 
-      <motion.div variants={item} className="space-y-3">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           {[
             { label: '7 ngày', start: daysAgoString(6), end: todayString() },
@@ -270,9 +368,9 @@ export default function ProgressPage() {
             />
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {overviewStats.map((s) => (
           <Card key={s.label} className="p-5">
             <CardContent className="flex items-center gap-4">
@@ -286,7 +384,7 @@ export default function ProgressPage() {
             </CardContent>
           </Card>
         ))}
-      </motion.div>
+      </div>
 
       <Tabs defaultValue="charts">
         <TabsList>
@@ -295,120 +393,55 @@ export default function ProgressPage() {
         </TabsList>
 
         <TabsContent value="charts">
-          <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="p-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="min-w-0 p-5">
               <CardContent>
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Câu hỏi theo ngày (tuần này)</h3>
-                <ResponsiveContainer width="100%" height={240}>
+                <ChartContainer>
                   <BarChart data={weeklyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="day" {...xAxisProps} />
+                    <YAxis {...yAxisProps} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="questions" name="Tổng câu" fill="#6ee7b7" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="correct" name="Đúng" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
 
-            <Card className="p-5">
+            <Card className="min-w-0 p-5">
               <CardContent>
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Xu hướng độ chính xác</h3>
-                <ResponsiveContainer width="100%" height={240}>
+                <ChartContainer>
                   <AreaChart data={accuracyTrend}>
+                    {accuracyGradientDef}
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                    <XAxis dataKey="week" {...xAxisProps} />
+                    <YAxis {...yAxisProps} domain={[0, 100]} />
                     <Tooltip content={<CustomTooltip />} />
-                    <defs>
-                      <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
                     <Area type="monotone" dataKey="accuracy" name="Accuracy" stroke="#10b981" fill="url(#accuracyGradient)" strokeWidth={2} />
                   </AreaChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </TabsContent>
 
         <TabsContent value="documents">
-          <motion.div variants={item} className="space-y-3">
+          <div className="space-y-3">
             {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
             {!isLoading && documentProgress.length === 0 && (
               <p className="text-sm text-slate-500">Chưa có dữ liệu học tập nào.</p>
             )}
             {paginatedDocs.map((doc) => (
-              <Card key={doc.id} className="p-5">
-                <CardContent>
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0 mt-0.5">
-                      <FileText className="h-5 w-5 text-primary-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-slate-800">{doc.title}</h3>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                            <Clock className="h-3 w-3" />
-                            {doc.lastStudied || '—'}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() =>
-                              setExpandedDocId((prev) => (prev === doc.id ? null : doc.id))
-                            }
-                          >
-                            {expandedDocId === doc.id ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 mb-3">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Chương</p>
-                          <div className="flex items-center gap-2">
-                            <Progress value={doc.chapterCount ? (doc.chaptersCompleted / doc.chapterCount) * 100 : 0} className="flex-1 h-1.5" />
-                            <span className="text-xs text-slate-600">{doc.chaptersCompleted}/{doc.chapterCount}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Câu hỏi</p>
-                          <div className="flex items-center gap-2">
-                            <Progress value={doc.questionCount ? (doc.answeredCount / doc.questionCount) * 100 : 0} className="flex-1 h-1.5" />
-                            <span className="text-xs text-slate-600">{doc.answeredCount}/{doc.questionCount}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">Độ chính xác</p>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className={`h-3.5 w-3.5 ${doc.accuracy >= 75 ? 'text-emerald-500' : doc.accuracy >= 60 ? 'text-amber-500' : 'text-red-500'}`} />
-                            <span className={`text-sm font-medium ${doc.accuracy >= 75 ? 'text-emerald-600' : doc.accuracy >= 60 ? 'text-amber-600' : 'text-red-600'}`}>
-                              {doc.accuracy}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {expandedDocId === doc.id && (
-                        <div className="mt-4 border-t border-slate-100 pt-4">
-                          <DocumentDetailPanel documentId={doc.id} range={range} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <DocumentRow
+                key={doc.id}
+                doc={doc}
+                isExpanded={expandedDocId === doc.id}
+                onToggle={() => setExpandedDocId((prev) => (prev === doc.id ? null : doc.id))}
+                range={range}
+              />
             ))}
             {totalPages > 1 && (
               <div className="flex items-center justify-between pt-2">
@@ -425,7 +458,7 @@ export default function ProgressPage() {
                 </div>
               </div>
             )}
-          </motion.div>
+          </div>
         </TabsContent>
       </Tabs>
     </motion.div>
