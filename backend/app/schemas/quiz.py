@@ -116,6 +116,15 @@ class ExamStartOut(CamelModel):
     questions: List[QuestionOut]
 
 
+class ExamPartialPoolOut(CamelModel):
+    # Not an error: the requested pool is larger than what's available.
+    # Returned with HTTP 200 so the client can prompt the user to continue
+    # with fewer questions without the browser logging a failed request.
+    partial_pool: bool = True
+    available: int
+    requested: int
+
+
 class ExamSubmit(CamelModel):
     answers: Dict[int, Optional[str]] = Field(default_factory=dict)
 

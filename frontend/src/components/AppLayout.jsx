@@ -1,14 +1,24 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import { ExamFocusProvider, useExamFocus } from './ExamFocusContext'
 
-export default function AppLayout() {
+function AppLayoutInner() {
+  const { focusMode } = useExamFocus()
   return (
     <div className="min-h-screen bg-surface">
       <div className="bg-mesh" />
-      <Sidebar />
-      <main className="ml-64 min-h-screen p-8">
+      {!focusMode && <Sidebar />}
+      <main className={`min-h-screen p-8 ${focusMode ? '' : 'ml-64'}`}>
         <Outlet />
       </main>
     </div>
+  )
+}
+
+export default function AppLayout() {
+  return (
+    <ExamFocusProvider>
+      <AppLayoutInner />
+    </ExamFocusProvider>
   )
 }

@@ -23,6 +23,7 @@ from backend.app.schemas.quiz import (
     ExamProgressIn,
     ExamResultItem,
     ExamResultOut,
+    ExamPartialPoolOut,
     ExamSessionOut,
     ExamStart,
     ExamStartOut,
@@ -74,7 +75,7 @@ async def _pick_question_ids(
     return random.sample(ids, limit)
 
 
-@router.post("", response_model=ExamStartOut)
+@router.post("", response_model=ExamStartOut | ExamPartialPoolOut)
 async def start_exam(
     payload: ExamStart,
     current: User = Depends(get_current_user),
@@ -118,13 +119,11 @@ async def start_exam(
             status.HTTP_400_BAD_REQUEST, "Không có câu hỏi khả dụng cho bài kiểm tra"
         )
     if len(pool_ids) < payload.question_limit and not payload.allow_partial:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={
-                "code": "partial_pool",
-                "available": len(pool_ids),
-                "requested": payload.question_limit,
-            },
+        # Routine outcome, not an error: let the client confirm continuing
+        # with a smaller pool. Returned as 200 to avoid a console error.
+        return ExamPartialPoolOut(
+            available=len(pool_ids),
+            requested=payload.question_limit,
         )
     question_ids = pool_ids
 

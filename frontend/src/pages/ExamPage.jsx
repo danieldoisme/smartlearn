@@ -25,6 +25,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { useAvailableStudyChapters } from '@/api/study'
 import { usePreferences } from '@/api/me'
+import { useExamFocus } from '@/components/ExamFocusContext'
 import {
   useCurrentExam,
   useSaveExamProgress,
@@ -42,15 +43,36 @@ const QUESTION_TYPE_OPTIONS = [
   { value: QuestionType.FILL, label: QuestionTypeLabel[QuestionType.FILL] },
 ]
 
+const SNAPSHOT_PREFIX = 'smartlearn.exam.'
+
+// A snapshot expires one exam-time-limit after its last write. Each write
+// refreshes savedAt, so an actively-used session never ages out mid-exam;
+// only abandoned ones do, time-limit minutes after the last interaction.
+function snapshotTtlMs(snapshot) {
+  const minutes = snapshot?.timeLimitMinutes || DEFAULT_TIME_LIMIT
+  return minutes * 60 * 1000
+}
+
+function isSnapshotExpired(snapshot, now = Date.now()) {
+  if (!snapshot?.savedAt) return true
+  return now - snapshot.savedAt > snapshotTtlMs(snapshot)
+}
+
 function snapshotKey(examId) {
-  return `smartlearn.exam.${examId}`
+  return `${SNAPSHOT_PREFIX}${examId}`
 }
 
 function readSnapshot(examId) {
   if (!examId) return null
   try {
     const raw = localStorage.getItem(snapshotKey(examId))
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (isSnapshotExpired(parsed)) {
+      clearSnapshot(examId)
+      return null
+    }
+    return parsed
   } catch {
     return null
   }
@@ -59,7 +81,10 @@ function readSnapshot(examId) {
 function writeSnapshot(examId, payload) {
   if (!examId) return
   try {
-    localStorage.setItem(snapshotKey(examId), JSON.stringify(payload))
+    localStorage.setItem(
+      snapshotKey(examId),
+      JSON.stringify({ ...payload, savedAt: Date.now() })
+    )
   } catch {
     // storage quota or disabled — ignore
   }
@@ -71,6 +96,26 @@ function clearSnapshot(examId) {
     localStorage.removeItem(snapshotKey(examId))
   } catch {
     // ignore
+  }
+}
+
+// Sweep every exam snapshot and drop the ones past their TTL (or corrupt).
+function sweepExpiredSnapshots() {
+  try {
+    const now = Date.now()
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i)
+      if (!key || !key.startsWith(SNAPSHOT_PREFIX)) continue
+      let stale = true
+      try {
+        stale = isSnapshotExpired(JSON.parse(localStorage.getItem(key)), now)
+      } catch {
+        stale = true // unparseable — treat as garbage
+      }
+      if (stale) localStorage.removeItem(key)
+    }
+  } catch {
+    // localStorage unavailable — nothing to sweep
   }
 }
 
@@ -109,11 +154,15 @@ export default function ExamPage() {
   const [answers, setAnswers] = useState({})
   const [currentQ, setCurrentQ] = useState(0)
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIME_LIMIT * 60)
+  const [examTimeLimit, setExamTimeLimit] = useState(DEFAULT_TIME_LIMIT)
   const [isPaused, setIsPaused] = useState(false)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [configError, setConfigError] = useState('')
   const [partialPool, setPartialPool] = useState(null)
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([])
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false)
+
+  const { setFocusMode } = useExamFocus()
 
   const { data: prefs } = usePreferences()
   const [prefsSeeded, setPrefsSeeded] = useState(false)
@@ -136,16 +185,23 @@ export default function ExamPage() {
   const submitMut = useSubmitExam()
   const saveProgress = useSaveExamProgress()
   const submittedRef = useRef(false)
+  const startingRef = useRef(false)
+  const leavingRef = useRef(false)
+
+  // Purge stale/expired exam snapshots once when the page mounts.
+  useEffect(() => {
+    sweepExpiredSnapshots()
+  }, [])
 
   const loadExamSession = useCallback((session) => {
     const snapshot = readSnapshot(session.examId)
+    const limit = session.timeLimitMinutes ?? DEFAULT_TIME_LIMIT
     setExamId(session.examId)
+    setExamTimeLimit(limit)
     setQuestions(session.questions || [])
     setAnswers(snapshot?.answers || normalizeAnswerMap(session.answers))
     setCurrentQ(snapshot?.currentQ || 0)
-    setTimeLeft(
-      snapshot?.timeLeft ?? (session.timeLimitMinutes ?? DEFAULT_TIME_LIMIT) * 60
-    )
+    setTimeLeft(snapshot?.timeLeft ?? limit * 60)
     setIsPaused(Boolean(snapshot?.isPaused ?? session.isPaused))
   }, [])
 
@@ -161,27 +217,68 @@ export default function ExamPage() {
 
   useEffect(() => {
     if (!examId) return
-    writeSnapshot(examId, { answers, currentQ, timeLeft, isPaused })
-  }, [answers, currentQ, examId, isPaused, timeLeft])
+    writeSnapshot(examId, { answers, currentQ, timeLeft, isPaused, timeLimitMinutes: examTimeLimit })
+  }, [answers, currentQ, examId, isPaused, timeLeft, examTimeLimit])
 
-  // Clear the exam snapshot on any exit (SPA nav-away/unmount or tab close /
-  // refresh) so an abandoned exam never leaves stale state behind. Only the
-  // snapshot key is removed — auth keys (smartlearn.token) are untouched.
-  const activeExamRef = useRef(null)
-  useEffect(() => {
-    activeExamRef.current = examId || null
-  }, [examId])
+  // The snapshot must SURVIVE refresh/close so the session can be resumed
+  // (see useCurrentExam + loadExamSession). It is cleared only on submit
+  // (submitExam) — never on unload — otherwise resumption is impossible.
 
+  const examActive = Boolean(examId && questions.length)
+
+  // Focus mode: hide the app sidebar + go full-width while an exam is running.
   useEffect(() => {
-    const clearActive = () => {
-      if (activeExamRef.current) clearSnapshot(activeExamRef.current)
+    setFocusMode(examActive)
+    return () => setFocusMode(false)
+  }, [examActive, setFocusMode])
+
+  // External disruptions: warn on tab close/refresh, and auto-pause when the
+  // tab is hidden (switch/minimize) so the timer can't run unsupervised.
+  useEffect(() => {
+    if (!examActive) return
+
+    const onBeforeUnload = (e) => {
+      if (submittedRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
     }
-    window.addEventListener('beforeunload', clearActive)
+    const onVisibility = () => {
+      if (document.hidden && !isPaused && !submittedRef.current && examId) {
+        setIsPaused(true)
+        writeSnapshot(examId, {
+          answers,
+          currentQ,
+          timeLeft,
+          isPaused: true,
+          timeLimitMinutes: examTimeLimit,
+          lastBlurAt: Date.now(),
+        })
+        saveProgress.mutate({ examId, answers, isPaused: true })
+      }
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
-      window.removeEventListener('beforeunload', clearActive)
-      clearActive()
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [])
+  }, [examActive, examId, isPaused, answers, currentQ, timeLeft, examTimeLimit, saveProgress])
+
+  // Internal navigation protection: intercept back/forward while an exam is
+  // live. A sentinel history entry is pushed so the first back press fires
+  // popstate here instead of leaving; we re-push and surface a confirm dialog.
+  useEffect(() => {
+    if (!examActive) return
+    window.history.pushState(null, '', window.location.href)
+    const onPopState = () => {
+      if (leavingRef.current || submittedRef.current) return
+      window.history.pushState(null, '', window.location.href)
+      setShowLeaveDialog(true)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [examActive])
 
   useEffect(() => {
     if (!examId || isPaused) return
@@ -203,6 +300,7 @@ export default function ExamPage() {
     await saveProgress.mutateAsync({ examId, answers, isPaused: false })
     await submitMut.mutateAsync({ examId, answers })
     clearSnapshot(examId)
+    leavingRef.current = true
     navigate(`/result?examId=${examId}`)
   }, [answers, examId, navigate, saveProgress, submitMut])
 
@@ -280,6 +378,8 @@ export default function ExamPage() {
   }
 
   const startExam = async (allowPartial = false) => {
+    if (startingRef.current || startMut.isPending || examId) return
+    startingRef.current = true
     setConfigError('')
     try {
       const effectiveChapterIds = config.selectedChapterIds.length
@@ -297,18 +397,19 @@ export default function ExamPage() {
         questionType: config.questionType === 'mixed' ? null : config.questionType,
         allowPartial,
       })
+      if (data?.partialPool) {
+        setPartialPool({ available: data.available, requested: data.requested })
+        return
+      }
       setPartialPool(null)
       loadExamSession(data)
     } catch (err) {
-      const status = err?.response?.status
       const detail = err?.response?.data?.detail
-      if (status === 409 && detail && typeof detail === 'object' && detail.code === 'partial_pool') {
-        setPartialPool({ available: detail.available, requested: detail.requested })
-        return
-      }
       setConfigError(
         typeof detail === 'string' ? detail : 'Không thể tạo bài kiểm tra.'
       )
+    } finally {
+      startingRef.current = false
     }
   }
 
@@ -317,6 +418,23 @@ export default function ExamPage() {
     const nextPaused = !isPaused
     setIsPaused(nextPaused)
     await saveProgress.mutateAsync({ examId, answers, isPaused: nextPaused })
+  }
+
+  // Confirmed exit from the leave dialog: pause + persist, then leave. The
+  // snapshot is intentionally kept so the user resumes where they left off.
+  const confirmLeave = async () => {
+    setShowLeaveDialog(false)
+    leavingRef.current = true
+    if (examId) {
+      setIsPaused(true)
+      writeSnapshot(examId, { answers, currentQ, timeLeft, isPaused: true, timeLimitMinutes: examTimeLimit })
+      try {
+        await saveProgress.mutateAsync({ examId, answers, isPaused: true })
+      } catch {
+        // network hiccup — local snapshot already holds the state
+      }
+    }
+    navigate('/')
   }
 
   const setAnswerForQuestion = (questionId, value) => {
@@ -802,6 +920,26 @@ export default function ExamPage() {
             >
               Nộp bài
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showLeaveDialog} onOpenChange={(open) => !open && setShowLeaveDialog(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rời khỏi bài kiểm tra?</DialogTitle>
+            <DialogDescription>
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Bài thi sẽ được tạm dừng và lưu lại. Bạn có thể quay lại để tiếp tục.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowLeaveDialog(false)}>
+              Ở lại
+            </Button>
+            <Button onClick={confirmLeave}>Tạm dừng & rời đi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
