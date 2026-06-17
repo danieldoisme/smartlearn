@@ -57,12 +57,20 @@ function readSnapshot(examId) {
 
 function writeSnapshot(examId, payload) {
   if (!examId) return
-  localStorage.setItem(snapshotKey(examId), JSON.stringify(payload))
+  try {
+    localStorage.setItem(snapshotKey(examId), JSON.stringify(payload))
+  } catch {
+    // storage quota or disabled — ignore
+  }
 }
 
 function clearSnapshot(examId) {
   if (!examId) return
-  localStorage.removeItem(snapshotKey(examId))
+  try {
+    localStorage.removeItem(snapshotKey(examId))
+  } catch {
+    // ignore
+  }
 }
 
 function formatTime(seconds) {
