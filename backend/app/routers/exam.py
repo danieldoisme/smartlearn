@@ -32,10 +32,13 @@ from backend.app.schemas.quiz import (
 router = APIRouter(prefix="/exams", tags=["exams"])
 
 
-async def _own_exam(db: AsyncSession, exam_id: int, user_id: int) -> Exam:
-    row = await db.execute(
-        select(Exam).where(Exam.id == exam_id).where(Exam.user_id == user_id)
-    )
+async def _own_exam(
+    db: AsyncSession, exam_id: int, user_id: int, *, lock: bool = False
+) -> Exam:
+    q = select(Exam).where(Exam.id == exam_id).where(Exam.user_id == user_id)
+    if lock:
+        q = q.with_for_update()
+    row = await db.execute(q)
     exam = row.scalar_one_or_none()
     if exam is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Exam not found")
@@ -301,7 +304,7 @@ async def submit_exam(
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    exam = await _own_exam(db, exam_id, current.id)
+    exam = await _own_exam(db, exam_id, current.id, lock=True)
     if exam.completed_at is not None:
         items = await _load_exam_items(db, exam.id)
         results = _build_results(items)

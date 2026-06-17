@@ -382,92 +382,96 @@ async def delete_document(
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
 
-    chapter_ids = [
-        row[0]
-        for row in (
-            await db.execute(select(Chapter.id).where(Chapter.document_id == doc.id))
-        ).all()
-    ]
-    question_ids: list[int] = []
-    if chapter_ids:
-        question_ids = [
+    try:
+        chapter_ids = [
             row[0]
             for row in (
-                await db.execute(
-                    select(Question.id).where(Question.chapter_id.in_(chapter_ids))
-                )
+                await db.execute(select(Chapter.id).where(Chapter.document_id == doc.id))
             ).all()
         ]
-
-    bookmark_ids: list[int] = []
-    if chapter_ids or question_ids:
-        bookmark_filters = []
+        question_ids: list[int] = []
         if chapter_ids:
-            bookmark_filters.append(Bookmark.chapter_id.in_(chapter_ids))
-        if question_ids:
-            bookmark_filters.append(Bookmark.question_id.in_(question_ids))
-        bookmark_rows = (
-            await db.execute(
-                select(Bookmark.id).where(
-                    Bookmark.user_id == current.id,
-                    or_(*bookmark_filters),
-                )
-            )
-        ).all()
-        bookmark_ids = [row[0] for row in bookmark_rows]
+            question_ids = [
+                row[0]
+                for row in (
+                    await db.execute(
+                        select(Question.id).where(Question.chapter_id.in_(chapter_ids))
+                    )
+                ).all()
+            ]
 
-    if bookmark_ids:
-        await db.execute(delete(Note).where(Note.bookmark_id.in_(bookmark_ids)))
-        await db.execute(delete(Bookmark).where(Bookmark.id.in_(bookmark_ids)))
-
-    if question_ids:
-        await db.execute(delete(Note).where(Note.question_id.in_(question_ids)))
-        await db.execute(
-            delete(UserAnswer).where(UserAnswer.question_id.in_(question_ids))
-        )
-        exam_ids = [
-            row[0]
-            for row in (
+        bookmark_ids: list[int] = []
+        if chapter_ids or question_ids:
+            bookmark_filters = []
+            if chapter_ids:
+                bookmark_filters.append(Bookmark.chapter_id.in_(chapter_ids))
+            if question_ids:
+                bookmark_filters.append(Bookmark.question_id.in_(question_ids))
+            bookmark_rows = (
                 await db.execute(
-                    select(ExamQuestion.exam_id)
-                    .where(ExamQuestion.question_id.in_(question_ids))
-                    .group_by(ExamQuestion.exam_id)
+                    select(Bookmark.id).where(
+                        Bookmark.user_id == current.id,
+                        or_(*bookmark_filters),
+                    )
                 )
             ).all()
-        ]
-        await db.execute(
-            delete(ExamQuestion).where(ExamQuestion.question_id.in_(question_ids))
-        )
-        if exam_ids:
-            remaining_exam_ids = {
+            bookmark_ids = [row[0] for row in bookmark_rows]
+
+        if bookmark_ids:
+            await db.execute(delete(Note).where(Note.bookmark_id.in_(bookmark_ids)))
+            await db.execute(delete(Bookmark).where(Bookmark.id.in_(bookmark_ids)))
+
+        if question_ids:
+            await db.execute(delete(Note).where(Note.question_id.in_(question_ids)))
+            await db.execute(
+                delete(UserAnswer).where(UserAnswer.question_id.in_(question_ids))
+            )
+            exam_ids = [
                 row[0]
                 for row in (
                     await db.execute(
                         select(ExamQuestion.exam_id)
-                        .where(ExamQuestion.exam_id.in_(exam_ids))
+                        .where(ExamQuestion.question_id.in_(question_ids))
                         .group_by(ExamQuestion.exam_id)
                     )
                 ).all()
-            }
-            deletable_exam_ids = [
-                exam_id for exam_id in exam_ids if exam_id not in remaining_exam_ids
             ]
-            if deletable_exam_ids:
-                await db.execute(delete(Exam).where(Exam.id.in_(deletable_exam_ids)))
+            await db.execute(
+                delete(ExamQuestion).where(ExamQuestion.question_id.in_(question_ids))
+            )
+            if exam_ids:
+                remaining_exam_ids = {
+                    row[0]
+                    for row in (
+                        await db.execute(
+                            select(ExamQuestion.exam_id)
+                            .where(ExamQuestion.exam_id.in_(exam_ids))
+                            .group_by(ExamQuestion.exam_id)
+                        )
+                    ).all()
+                }
+                deletable_exam_ids = [
+                    exam_id for exam_id in exam_ids if exam_id not in remaining_exam_ids
+                ]
+                if deletable_exam_ids:
+                    await db.execute(delete(Exam).where(Exam.id.in_(deletable_exam_ids)))
 
-        await db.execute(
-            delete(QuestionOption).where(QuestionOption.question_id.in_(question_ids))
-        )
-        await db.execute(delete(Question).where(Question.id.in_(question_ids)))
+            await db.execute(
+                delete(QuestionOption).where(QuestionOption.question_id.in_(question_ids))
+            )
+            await db.execute(delete(Question).where(Question.id.in_(question_ids)))
 
-    if chapter_ids:
-        await db.execute(
-            delete(StudySession).where(StudySession.chapter_id.in_(chapter_ids))
-        )
-        await db.execute(delete(Chapter).where(Chapter.id.in_(chapter_ids)))
+        if chapter_ids:
+            await db.execute(
+                delete(StudySession).where(StudySession.chapter_id.in_(chapter_ids))
+            )
+            await db.execute(delete(Chapter).where(Chapter.id.in_(chapter_ids)))
 
-    await db.delete(doc)
-    await db.commit()
+        await db.delete(doc)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return None
 
 

@@ -94,6 +94,7 @@ async def infer_document_structure(
             truncated_any = truncated_any or truncated
             break
         except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code if exc.response is not None else 0
             if _is_context_limit_error(exc) and (
                 max_chars > 4000 or max_input_tokens > 2500
             ):
@@ -101,8 +102,16 @@ async def infer_document_structure(
                 max_input_tokens = max(int(max_input_tokens * 0.75), 2500)
                 truncated_any = True
                 continue
+            if status_code == 429:
+                logger.warning(
+                    "AI parser rate-limited for %s", document_title
+                )
+                return AIParseOutcome(
+                    diagnostics=["AI parser rate-limited by provider. Try again later."]
+                )
             logger.warning(
-                "AI parser HTTP error for %s: %s",
+                "AI parser HTTP %s for %s: %s",
+                status_code,
                 document_title,
                 _preview_text(
                     exc.response.text if exc.response is not None else str(exc)
@@ -110,12 +119,17 @@ async def infer_document_structure(
             )
             return AIParseOutcome(
                 diagnostics=[
-                    "AI parser HTTP error: "
+                    f"AI parser HTTP error ({status_code}): "
                     + _preview_text(
                         exc.response.text if exc.response is not None else str(exc), 120
                     )
                 ]
             )
+        except httpx.TimeoutException as exc:
+            logger.warning(
+                "AI parser timeout for %s: %s", document_title, str(exc)
+            )
+            return AIParseOutcome(diagnostics=["AI parser timed out. Try again later."])
         except httpx.RequestError as exc:
             logger.warning(
                 "AI parser request error for %s: %s", document_title, str(exc)

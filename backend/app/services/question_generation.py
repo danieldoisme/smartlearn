@@ -135,8 +135,24 @@ async def generate_questions_for_chapter(
         )
         if ai_items:
             provider = "ai"
-    except Exception as exc:  # pragma: no cover - defensive logging path
-        logger.warning("AQG AI provider failed for chapter %s: %s", chapter_title, exc)
+    except httpx.TimeoutException as exc:
+        logger.warning("AQG AI timeout for chapter %s: %s", chapter_title, exc)
+        ai_warnings.append("AI provider timed out. Falling back to local generator.")
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else 0
+        logger.warning(
+            "AQG AI HTTP %s for chapter %s: %s",
+            status_code, chapter_title, _preview_text(exc.response.text if exc.response is not None else str(exc)),
+        )
+        if status_code == 429:
+            ai_warnings.append("AI provider rate-limited. Falling back to local generator.")
+        else:
+            ai_warnings.append(f"AI provider error (HTTP {status_code}). Falling back to local generator.")
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        logger.warning("AQG AI malformed response for chapter %s: %s", chapter_title, exc)
+        ai_warnings.append("AI provider returned malformed response. Falling back to local generator.")
+    except Exception as exc:
+        logger.exception("AQG AI unexpected failure for chapter %s: %s", chapter_title, exc)
         ai_warnings.append("AI provider unavailable. Falling back to local generator.")
     warnings.extend(ai_warnings)
     final_items = _dedupe_batch(ai_items)
@@ -275,10 +291,23 @@ async def _generate_questions_via_ai(
     ]
     passage_map = {passage.id: passage for passage in passages}
     drafts: list[GeneratedQuestionDraft] = []
-    for item in data.get("questions") or []:
+    raw_questions = data.get("questions") or []
+    dropped = 0
+    for item in raw_questions:
         normalized = _normalize_ai_question(item, passage_map=passage_map)
         if normalized is not None:
             drafts.append(normalized)
+        else:
+            dropped += 1
+            logger.debug(
+                "Dropped AI question: type=%s content=%s",
+                item.get("question_type", "?"),
+                _preview_text(str(item.get("content") or ""), 80),
+            )
+    if dropped:
+        logger.info("AQG dropped %d/%d AI-generated items during normalization", dropped, len(raw_questions))
+        if dropped == len(raw_questions) and raw_questions:
+            warnings.append("All AI-generated questions failed validation.")
     return _dedupe_batch(drafts), _dedupe_preserve_order(warnings)
 
 

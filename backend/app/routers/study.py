@@ -333,6 +333,20 @@ async def submit_answer(
             status.HTTP_404_NOT_FOUND, "Question not in session chapter"
         )
 
+    existing_answer = (
+        await db.execute(
+            select(UserAnswer).where(
+                UserAnswer.session_id == session.id,
+                UserAnswer.question_id == payload.question_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing_answer is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Question already answered in this session",
+        )
+
     if payload.is_skipped:
         is_correct, correct_answer, correct_label = False, None, None
     else:
