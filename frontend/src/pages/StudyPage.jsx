@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -137,8 +137,6 @@ export default function StudyPage() {
   const submitMut = useSubmitStudyAnswer(sessionId)
   const completeMut = useCompleteStudySession()
 
-  const startStatus = startMut.status
-
   const [prevChapterKey, setPrevChapterKey] = useState(null)
   const chapterKey = `${chapterId}:${sessionType}`
 
@@ -194,6 +192,27 @@ export default function StudyPage() {
       serverResult,
     })
   }, [sessionId, chapterId, sessionType, currentQ, selected, fillAnswer, submitted, serverResult])
+
+  // Clear the session snapshot on any exit (SPA nav-away/unmount or tab close /
+  // refresh) so a quit session never leaves stale state for the next one. Only
+  // the snapshot key is removed — auth keys (smartlearn.token) are untouched.
+  const activeSnapshotRef = useRef(null)
+  useEffect(() => {
+    activeSnapshotRef.current =
+      sessionId && chapterId != null ? { sessionType, chapterId } : null
+  }, [sessionId, chapterId, sessionType])
+
+  useEffect(() => {
+    const clearActive = () => {
+      const active = activeSnapshotRef.current
+      if (active) clearSnapshot(active.sessionType, active.chapterId)
+    }
+    window.addEventListener('beforeunload', clearActive)
+    return () => {
+      window.removeEventListener('beforeunload', clearActive)
+      clearActive()
+    }
+  }, [])
 
   const question = questions[currentQ]
   const totalQ = questions.length

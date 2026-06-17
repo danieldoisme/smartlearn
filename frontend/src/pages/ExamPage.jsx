@@ -149,6 +149,25 @@ export default function ExamPage() {
     writeSnapshot(examId, { answers, currentQ, timeLeft, isPaused })
   }, [answers, currentQ, examId, isPaused, timeLeft])
 
+  // Clear the exam snapshot on any exit (SPA nav-away/unmount or tab close /
+  // refresh) so an abandoned exam never leaves stale state behind. Only the
+  // snapshot key is removed — auth keys (smartlearn.token) are untouched.
+  const activeExamRef = useRef(null)
+  useEffect(() => {
+    activeExamRef.current = examId || null
+  }, [examId])
+
+  useEffect(() => {
+    const clearActive = () => {
+      if (activeExamRef.current) clearSnapshot(activeExamRef.current)
+    }
+    window.addEventListener('beforeunload', clearActive)
+    return () => {
+      window.removeEventListener('beforeunload', clearActive)
+      clearActive()
+    }
+  }, [])
+
   useEffect(() => {
     if (!examId || isPaused) return
     const timer = setInterval(() => {
