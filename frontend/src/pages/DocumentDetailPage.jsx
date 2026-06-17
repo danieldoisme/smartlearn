@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ListChecks,
   Save,
+  Bookmark,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,7 @@ import {
   useChapterQuestions,
   useUpdateQuestion,
 } from '@/api/document'
+import { useBookmarks, useCreateBookmark, useDeleteBookmark } from '@/api/bookmarks'
 
 const questionTypes = [
   { value: QuestionType.MCQ, label: QuestionTypeLabel[QuestionType.MCQ] },
@@ -123,10 +125,25 @@ export default function DocumentDetailPage() {
   const [questionPage, setQuestionPage] = useState(1)
   const { data: chapterQuestions = [], isFetching: questionsLoading } = useChapterQuestions(questionsChapterId)
   const updateQuestion = useUpdateQuestion(docId)
+  const { data: bookmarks = [] } = useBookmarks()
+  const createBookmark = useCreateBookmark()
+  const deleteBookmark = useDeleteBookmark()
+  const [pageInput, setPageInput] = useState('')
+  const [pageBookmarkMsg, setPageBookmarkMsg] = useState('')
   const chapters = useMemo(() => doc?.chapters || [], [doc])
   const viewerChapter = useMemo(
     () => chapters.find((chapter) => chapter.id === viewerChapterId) || null,
     [chapters, viewerChapterId],
+  )
+  // Page bookmarks already saved for the chapter open in the viewer.
+  const chapterPageBookmarks = useMemo(
+    () =>
+      bookmarks
+        .filter(
+          (bm) => bm.questionId == null && bm.pageNumber != null && bm.chapterId === viewerChapterId,
+        )
+        .sort((a, b) => a.pageNumber - b.pageNumber),
+    [bookmarks, viewerChapterId],
   )
   const totalAnswered = doc?.totalAnswered ?? 0
   const totalQuestions = doc?.totalQuestions ?? 0
@@ -172,6 +189,15 @@ export default function DocumentDetailPage() {
     }, 120)
     return () => window.clearTimeout(timer)
   }, [focusChapterId, paginatedChapters])
+
+  // Seed the page-bookmark input with the chapter's first page when the
+  // content viewer opens, and clear any stale feedback.
+  const [prevViewerChapterId, setPrevViewerChapterId] = useState(null)
+  if (viewerChapterId !== prevViewerChapterId) {
+    setPrevViewerChapterId(viewerChapterId)
+    setPageInput(viewerChapter?.pageStart != null ? String(viewerChapter.pageStart) : '')
+    setPageBookmarkMsg('')
+  }
 
   const [prevOpenChapterId, setPrevOpenChapterId] = useState(null)
   if (openChapterId !== prevOpenChapterId && chapters.length > 0) {
@@ -228,6 +254,41 @@ export default function DocumentDetailPage() {
       setShowGenerate(false)
     } catch (err) {
       setGenerateMessage(getErrorMessage(err, 'Không thể tạo câu hỏi cho chương này.'))
+    }
+  }
+
+  const handleSavePageBookmark = async () => {
+    const pageNumber = parseOptionalPositiveInteger(pageInput)
+    if (!pageNumber || Number.isNaN(pageNumber)) {
+      setPageBookmarkMsg('Nhập số trang hợp lệ.')
+      return
+    }
+    if (
+      viewerChapter?.pageStart != null &&
+      viewerChapter?.pageEnd != null &&
+      (pageNumber < viewerChapter.pageStart || pageNumber > viewerChapter.pageEnd)
+    ) {
+      setPageBookmarkMsg(`Trang phải trong khoảng ${viewerChapter.pageStart}–${viewerChapter.pageEnd}.`)
+      return
+    }
+    if (chapterPageBookmarks.some((bm) => bm.pageNumber === pageNumber)) {
+      setPageBookmarkMsg(`Trang ${pageNumber} đã được đánh dấu.`)
+      return
+    }
+    try {
+      await createBookmark.mutateAsync({ chapterId: viewerChapterId, pageNumber })
+      setPageBookmarkMsg(`Đã đánh dấu trang ${pageNumber}.`)
+    } catch (err) {
+      setPageBookmarkMsg(getErrorMessage(err, 'Không thể đánh dấu trang.'))
+    }
+  }
+
+  const handleDeletePageBookmark = async (bookmarkId) => {
+    try {
+      await deleteBookmark.mutateAsync(bookmarkId)
+      setPageBookmarkMsg('Đã xóa đánh dấu trang.')
+    } catch (err) {
+      setPageBookmarkMsg(getErrorMessage(err, 'Không thể xóa đánh dấu.'))
     }
   }
 
@@ -603,6 +664,59 @@ export default function DocumentDetailPage() {
               rows={18}
               className="glass-input min-h-[24rem] w-full resize-y rounded-xl px-4 py-3 text-sm text-slate-800"
             />
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label htmlFor="viewer-page-bookmark" className="block text-xs font-medium text-slate-600 mb-1">
+                    Đánh dấu trang
+                    {viewerChapter?.pageStart != null && viewerChapter?.pageEnd != null
+                      ? ` (${viewerChapter.pageStart}–${viewerChapter.pageEnd})`
+                      : ''}
+                  </label>
+                  <Input
+                    id="viewer-page-bookmark"
+                    name="viewerPageBookmark"
+                    type="number"
+                    min={viewerChapter?.pageStart ?? 1}
+                    max={viewerChapter?.pageEnd ?? undefined}
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    placeholder="Số trang"
+                  />
+                </div>
+                <Button onClick={handleSavePageBookmark} disabled={createBookmark.isPending}>
+                  <Bookmark className="h-4 w-4" />
+                  Lưu trang
+                </Button>
+              </div>
+
+              {pageBookmarkMsg && (
+                <p className="text-xs text-primary-700">{pageBookmarkMsg}</p>
+              )}
+
+              {chapterPageBookmarks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {chapterPageBookmarks.map((bm) => (
+                    <span
+                      key={bm.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700"
+                    >
+                      Trang {bm.pageNumber}
+                      <button
+                        type="button"
+                        aria-label={`Xóa đánh dấu trang ${bm.pageNumber}`}
+                        onClick={() => handleDeletePageBookmark(bm.id)}
+                        disabled={deleteBookmark.isPending}
+                        className="text-amber-500 hover:text-amber-700 cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
