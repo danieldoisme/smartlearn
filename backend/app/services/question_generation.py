@@ -273,6 +273,16 @@ async def _generate_questions_via_ai(
 ) -> tuple[list[GeneratedQuestionDraft], list[str]]:
     if not passages:
         return [], ["No passages available for AI generation."]
+    # Output JSON grows linearly with the requested question count. A fixed
+    # max_tokens truncates large batches mid-object, so scale the budget by count
+    # (plus the thinking-token overhead reserved by _post_gemini) and cap it.
+    max_output_tokens = min(
+        max(
+            settings.AQG_MAX_TOKENS,
+            settings.AQG_THINKING_BUDGET + count * settings.AQG_TOKENS_PER_QUESTION,
+        ),
+        settings.AQG_MAX_TOKENS_CEILING,
+    )
     async with httpx.AsyncClient(timeout=settings.AQG_TIMEOUT_SECONDS) as client:
         response = await _post_gemini(
             client,
@@ -286,8 +296,9 @@ async def _generate_questions_via_ai(
                 passages=passages,
             ),
             response_schema=_aqg_response_schema(),
-            max_tokens=settings.AQG_MAX_TOKENS,
+            max_tokens=max_output_tokens,
             temperature=0.2,
+            thinking_budget=settings.AQG_THINKING_BUDGET,
         )
         response.raise_for_status()
     message = _extract_gemini_content(response.json())
@@ -947,14 +958,73 @@ def _load_json_payload(raw: str) -> dict[str, Any] | None:
     balanced = _extract_balanced_json_object(text)
     if balanced:
         candidates.insert(0, balanced)
+    fallback_dict: dict[str, Any] | None = None
     for candidate in candidates:
         try:
             parsed = json.loads(candidate)
         except Exception:
             continue
         if isinstance(parsed, dict):
-            return parsed
-    return None
+            # Prefer the questions container. On truncated output the first
+            # balanced object is an inner question, not the wrapper, so keep
+            # looking before falling back to salvage.
+            if "questions" in parsed:
+                return parsed
+            if fallback_dict is None:
+                fallback_dict = parsed
+    # Last resort: the response was cut off mid-stream (e.g. MAX_TOKENS) and no
+    # candidate parses cleanly. Recover the question objects that did complete so
+    # a large batch still yields AI questions instead of failing wholesale.
+    salvaged = _salvage_truncated_questions(text)
+    if salvaged is not None:
+        return salvaged
+    return fallback_dict
+
+
+def _salvage_truncated_questions(text: str) -> dict[str, Any] | None:
+    array_start = text.find('"questions"')
+    if array_start == -1:
+        return None
+    bracket = text.find("[", array_start)
+    if bracket == -1:
+        return None
+
+    questions: list[Any] = []
+    depth = 0
+    in_string = False
+    escape = False
+    object_start = -1
+    for index in range(bracket + 1, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            if depth == 0:
+                object_start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and object_start != -1:
+                fragment = text[object_start : index + 1]
+                try:
+                    questions.append(json.loads(fragment))
+                except Exception:
+                    pass
+                object_start = -1
+        elif char == "]" and depth == 0:
+            break
+    if not questions:
+        return None
+    return {"warnings": ["AI output truncated; recovered partial questions."], "questions": questions}
 
 
 def _extract_balanced_json_object(text: str) -> str | None:

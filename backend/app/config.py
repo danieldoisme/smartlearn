@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 
 class Settings(BaseSettings):
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-3.1-pro"
+    GEMINI_MODEL: str = "gemini-2.5-pro"
 
     AI_PARSER_TIMEOUT_SECONDS: float = 180.0
     AI_PARSER_MAX_CHARS: int = 48000
@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     AI_PARSER_MIN_CONFIDENCE: float = 0.45
 
     AQG_TIMEOUT_SECONDS: float = 240.0
-    AQG_MAX_TOKENS: int = 4000
+    AQG_MAX_TOKENS: int = 8192
+    AQG_TOKENS_PER_QUESTION: int = 384
+    AQG_MAX_TOKENS_CEILING: int = 24576
+    AQG_THINKING_BUDGET: int = 2048
     AQG_MAX_PASSAGES: int = 18
 
     DB_HOST: str = "localhost"

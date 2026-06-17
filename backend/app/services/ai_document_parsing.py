@@ -266,17 +266,24 @@ async def _post_gemini(
     response_schema: dict,
     max_tokens: int,
     temperature: float,
+    thinking_budget: int | None = None,
 ) -> httpx.Response:
     url = f"{_GEMINI_BASE_URL}/{model}:generateContent"
+    generation_config: dict[str, Any] = {
+        "maxOutputTokens": max_tokens,
+        "temperature": temperature,
+        "responseMimeType": "application/json",
+        "responseSchema": response_schema,
+    }
+    # Gemini 2.5 "thinking" models spend output-token budget on internal reasoning
+    # before emitting visible JSON. Cap that budget so large responses are not
+    # truncated mid-object (which would make the JSON unparseable).
+    if thinking_budget is not None:
+        generation_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": temperature,
-            "responseMimeType": "application/json",
-            "responseSchema": response_schema,
-        },
+        "generationConfig": generation_config,
     }
     return await client.post(url, params={"key": api_key}, json=payload)
 
