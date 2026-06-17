@@ -9,9 +9,15 @@ import {
   BookOpen,
   FileText,
   CheckCircle2,
+  CircleDashed,
   XCircle,
   Lightbulb,
   Bookmark,
+  ListChecks,
+  Target,
+  Trophy,
+  RotateCcw,
+  TrendingUp,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -153,6 +159,13 @@ export default function StudyPage() {
   if (chapterKey !== prevChapterKey) {
     setPrevChapterKey(chapterKey)
     if (prevChapterKey !== null) {
+      // Switching/leaving a chapter without unmounting (e.g. sidebar "Học tập"
+      // goes /study?chapterId=X -> /study, same route component). The unmount
+      // cleanup never fires here, so drop the prior chapter's snapshot now to
+      // avoid stale `smartlearn.study.*` keys lingering in localStorage.
+      const [prevChapterIdRaw, prevSessionType] = prevChapterKey.split(':')
+      const prevChapterId = prevChapterIdRaw === 'null' ? null : Number(prevChapterIdRaw)
+      if (prevChapterId != null) clearSnapshot(prevSessionType, prevChapterId)
       startMut.reset()
       setSessionId(null)
       setQuestions([])
@@ -397,7 +410,11 @@ export default function StudyPage() {
                           </div>
                         </div>
                         <Button onClick={() => navigate(`/study?chapterId=${chapter.chapterId}`)}>
-                          {chapter.answeredCount > 0 ? 'Tiếp tục học' : 'Bắt đầu học'}
+                          {getChapterStatus(chapter) === 'completed'
+                            ? 'Luyện tập lại'
+                            : chapter.answeredCount > 0
+                              ? 'Tiếp tục học'
+                              : 'Bắt đầu học'}
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       </CardContent>
@@ -443,44 +460,99 @@ export default function StudyPage() {
     const total = summary.totalQuestions || totalQ || 0
     const correct = summary.correctCount || 0
     const pct = total ? Math.round((correct / total) * 100) : 0
+    // Wrong question ids from this session's locally-graded answers. Drives the
+    // "Ôn tập câu sai" action, which reuses the review-session URL contract.
+    const wrongIds = Object.entries(answers)
+      .filter(([, res]) => res && res.isCorrect === false)
+      .map(([id]) => Number(id))
+      .filter(Number.isInteger)
+    const reviewHref =
+      chapterId != null && wrongIds.length
+        ? `/study?${new URLSearchParams({
+            chapterId: String(chapterId),
+            mode: 'review',
+            questionIds: wrongIds.join(','),
+          }).toString()}`
+        : null
+    // Accuracy-tiered accent, matching the Progress dashboard thresholds.
+    const tier =
+      pct >= 75
+        ? { text: 'text-emerald-600', bg: 'bg-emerald-50', icon: Trophy, label: 'Kết quả tốt' }
+        : pct >= 60
+          ? { text: 'text-amber-600', bg: 'bg-amber-50', icon: TrendingUp, label: 'Khá ổn' }
+          : { text: 'text-red-600', bg: 'bg-red-50', icon: TrendingUp, label: 'Cần ôn thêm' }
+    const TierIcon = tier.icon
+    const stats = [
+      { label: 'Tổng số câu', value: total, icon: ListChecks, color: 'text-primary-600', bg: 'bg-primary-50' },
+      { label: 'Câu đúng', value: `${correct}/${total}`, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { label: 'Tỷ lệ chính xác', value: `${pct}%`, icon: Target, color: tier.text, bg: tier.bg },
+    ]
     return (
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl mx-auto py-10"
+        className="max-w-3xl mx-auto py-10 space-y-6"
       >
         <Card className="p-8">
-          <CardContent className="text-center space-y-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 mx-auto">
-              <CheckCircle2 className="h-7 w-7 text-primary-600" />
+          <CardContent className="text-center space-y-3">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${tier.bg} mx-auto`}>
+              <TierIcon className={`h-7 w-7 ${tier.text}`} />
             </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-bold text-slate-900">Hoàn thành phiên học</h1>
               <p className="text-sm text-slate-500">
                 {sessionType === SessionType.REVIEW
                   ? 'Bạn đã ôn xong các câu sai trong phiên này.'
-                  : 'Kết quả tổng quan của phiên học vừa rồi.'}
+                  : `${tier.label} · Kết quả tổng quan của phiên học vừa rồi.`}
               </p>
             </div>
-            <div className="flex items-center justify-center gap-8 py-2">
-              <div>
-                <p className="text-3xl font-bold text-primary-600">{correct}/{total}</p>
-                <p className="text-xs text-slate-500 mt-1">Câu đúng</p>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-slate-900">{pct}%</p>
-                <p className="text-xs text-slate-500 mt-1">Tỷ lệ chính xác</p>
-              </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {stats.map((s) => {
+            const StatIcon = s.icon
+            return (
+              <Card key={s.label} className="p-5">
+                <CardContent className="flex items-center gap-4">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${s.bg} shrink-0`}>
+                    <StatIcon className={`h-5 w-5 ${s.color}`} />
+                  </div>
+                  <div>
+                    <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        <Card className="p-6">
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Tỷ lệ chính xác</span>
+              <span className={`font-semibold ${tier.text}`}>{pct}%</span>
             </div>
             <Progress value={pct} className="h-2" />
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <Button onClick={() => navigate('/progress')}>Xem tiến độ</Button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 pt-2">
               <Button
                 variant="outline"
                 onClick={() => navigate(sessionType === SessionType.REVIEW ? '/review' : '/study')}
               >
-                {sessionType === SessionType.REVIEW ? 'Về trang ôn tập' : 'Học chương khác'}
+                <BookOpen className="h-4 w-4" />
+                {sessionType === SessionType.REVIEW ? 'Quay lại Ôn tập' : 'Quay lại Học tập'}
               </Button>
+              <Button onClick={() => navigate('/progress')}>
+                <TrendingUp className="h-4 w-4" />
+                Xem Tiến độ
+              </Button>
+              {reviewHref && (
+                <Button variant="outline" onClick={() => navigate(reviewHref)}>
+                  <RotateCcw className="h-4 w-4" />
+                  Ôn tập câu sai ({wrongIds.length})
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -607,14 +679,11 @@ export default function StudyPage() {
         }
       }
       clearSnapshot(sessionType, chapterId)
-      if (revealAnswers) {
-        navigate(sessionType === SessionType.REVIEW ? '/review' : '/progress')
-      } else {
-        // "Cuối phiên": answers were hidden the whole session, so render the
-        // score summary in-page instead of silently redirecting.
-        setSummary(result || { totalQuestions: totalQ, correctCount: 0 })
-        setFinishing(false)
-      }
+      // Always land on the in-page result view (both "Tức thì" and "Cuối phiên"
+      // modes) so the user sees the session score before navigating on. The
+      // server-computed totals are preferred; fall back to local counts.
+      setSummary(result || { totalQuestions: totalQ, correctCount: 0 })
+      setFinishing(false)
     }
   }
 
@@ -706,6 +775,13 @@ export default function StudyPage() {
                   : selected[question.id] === opt.label
                 const correct = optionIsCorrect(opt)
 
+                // Four post-submission states, distinguished by whether the user
+                // actually selected the option — not just by correctness.
+                const correctlySelected = revealCurrent && isSelected && correct
+                const missedCorrect = revealCurrent && !isSelected && correct
+                const incorrectlySelected = revealCurrent && isSelected && !correct
+                // 4th state (correctly left blank) is the muted else-branch below.
+
                 return (
                   <button
                     key={opt.label}
@@ -713,11 +789,13 @@ export default function StudyPage() {
                     disabled={isLocked}
                     className={`w-full flex items-center gap-3 p-3.5 rounded-xl text-left text-sm transition-all ${isLocked ? 'cursor-default' : 'cursor-pointer'} ${
                       revealCurrent
-                        ? correct
-                          ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                          : isSelected
-                            ? 'bg-red-50 border border-red-200 text-red-800'
-                            : 'bg-slate-50 border border-slate-100 text-slate-500'
+                        ? correctlySelected
+                          ? 'bg-emerald-50 border border-emerald-300 text-emerald-800'
+                          : missedCorrect
+                            ? 'bg-emerald-50/40 border border-dashed border-emerald-400 text-emerald-700'
+                            : incorrectlySelected
+                              ? 'bg-red-50 border border-red-300 text-red-800'
+                              : 'bg-slate-50 border border-slate-100 text-slate-500 opacity-50'
                         : isSelected
                           ? 'bg-primary-50 border border-primary-200 text-primary-800'
                           : 'bg-slate-50 border border-slate-100 text-slate-700 hover:bg-slate-100 hover:border-slate-200'
@@ -729,22 +807,25 @@ export default function StudyPage() {
                         : 'rounded-full'
                     } ${
                       revealCurrent
-                        ? correct
+                        ? correctlySelected
                           ? 'border-emerald-500 bg-emerald-100 text-emerald-700'
-                          : isSelected
-                            ? 'border-red-500 bg-red-100 text-red-700'
-                            : 'border-slate-300 bg-white text-transparent'
+                          : missedCorrect
+                            ? 'border-dashed border-emerald-400 bg-white text-emerald-600'
+                            : incorrectlySelected
+                              ? 'border-red-500 bg-red-100 text-red-700'
+                              : 'border-slate-300 bg-white text-transparent'
                         : isSelected
                           ? 'border-primary-500 bg-primary-100 text-primary-700'
                           : 'border-slate-300 bg-white text-transparent'
                     }`}>
-                      <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${isSelected || (revealCurrent && correct) ? '' : 'opacity-0'}`}>
+                      <span className={`block ${question.questionType === QuestionType.MULTI ? 'text-xs font-bold' : 'h-2.5 w-2.5 rounded-full bg-current'} ${isSelected || correctlySelected || missedCorrect ? '' : 'opacity-0'}`}>
                         {question.questionType === QuestionType.MULTI ? '✓' : ''}
                       </span>
                     </span>
                     <span className="flex-1 vn-text">{opt.content}</span>
-                    {revealCurrent && correct && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
-                    {revealCurrent && isSelected && !correct && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                    {correctlySelected && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                    {missedCorrect && <CircleDashed className="h-4 w-4 text-emerald-500 shrink-0" />}
+                    {incorrectlySelected && <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
                   </button>
                 )
               })}
