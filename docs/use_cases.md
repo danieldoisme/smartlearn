@@ -10,16 +10,16 @@
 
 | Layer | Technology |
 |---|---|
-| Frontend | React (SPA) |
-| Backend | FastAPI, Python |
-| Database | MySQL (13 tables, relational schema) |
-| AI / NLP | Automated Question Generation (MCQ, Multi-select, Fill-in-the-blank) |
+| Frontend | React 19 + Vite (SPA), TanStack Query, Tailwind CSS v4 + Radix UI |
+| Backend | FastAPI, Python, SQLAlchemy async + aiomysql |
+| Database | MySQL 8+ (14 tables, relational schema) |
+| AI / NLP | Google Gemini (`gemini-2.5-pro`) — Automated Question Generation (MCQ, Multi-select, Fill-in-the-blank, mixed) |
 | File Formats | PDF, DOCX |
 
 **Core AI Pipelines**
 
-- **Document Structure Extraction** — parses uploaded files, infers chapter/section boundaries, preserves page metadata.
-- **Automated Question Generation (AQG)** — generates questions from chapter text, attaches source passage and page number to each question.
+- **Document Structure Extraction** — Gemini parses uploaded files, infers chapter/section boundaries, preserves page metadata; falls back to heuristic extraction on failure.
+- **Automated Question Generation (AQG)** — Gemini generates questions from chapter text and attaches source passage and page number to each; falls back to a local heuristic generator when needed.
 
 ---
 

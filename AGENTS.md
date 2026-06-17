@@ -4,25 +4,27 @@ This document describes the AI modules in SmartLearn and which use cases they se
 
 ## Automated Question Generation (AQG) Agent
 
-Uses an AI provider-backed AQG pipeline to turn curated chapter text into quiz questions.
+Uses a Google Gemini-backed AQG pipeline (`gemini-2.5-pro`) to turn curated chapter text into quiz questions.
 
 - **Use Case**: UC-05 (Tạo câu hỏi tự động từ tài liệu)
 - **What it does**:
-    - Parses chapter content with provider-backed AI models to extract entities, concepts, and candidate quiz prompts.
-    - Generates three question formats: Multiple Choice, Multiple Select, Fill-in-the-blank.
+    - Ranks chapter sentences/passages by signal, then prompts Gemini to extract concepts and candidate quiz prompts.
+    - Generates four request modes: Multiple Choice, Multiple Select, Fill-in-the-blank, and `mixed` (any combination).
     - Attaches source metadata to each question — the original text segment and page number.
+    - Falls back to a local heuristic generator when Gemini fails, rate-limits, or returns too few valid questions (`used_fallback: true`).
 
 ---
 
 ## Document Understanding & Structure Extraction Agent
 
-AI-powered document parsing that builds a reliable content hierarchy out of uploaded files.
+Gemini-powered document parsing that builds a reliable content hierarchy out of uploaded files.
 
 - **Use Case**: UC-03 (Upload tài liệu & Phân tích cấu trúc)
 - **What it does**:
     - Reads PDF/DOCX files and extracts clean text.
-    - Infers chapter/section boundaries semantically and preserves source/page metadata for accurate downstream question generation.
-    - Allows the user to review and correct the proposed structure before saving when confidence is low.
+    - Prefers deterministic "Chương N" chapter detection; otherwise asks Gemini to infer chapter/section boundaries semantically, preserving source/page metadata for downstream question generation.
+    - Handles long documents by compressing pages to heading candidates, windowing the request when even the compressed payload overflows the model budget.
+    - Flags low-confidence or truncated results for user review, and silently falls back to heuristic text extraction on AI failure (`used_fallback: true`).
 
 ---
 
