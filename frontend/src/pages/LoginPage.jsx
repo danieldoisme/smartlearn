@@ -194,38 +194,36 @@ export default function LoginPage() {
                   className="pl-10"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
+                  autoComplete="username"
                   required
                 />
               </div>
             </div>
 
-            {!isResetMode && (
-              <div>
-                <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="pl-10 pr-10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete={isLogin ? 'current-password' : 'new-password'}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+            <div className={isResetMode ? 'hidden' : undefined}>
+              <label htmlFor="password" className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  className="pl-10 pr-10"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  required={!isResetMode}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
-            )}
+            </div>
 
             {!isLogin && !isResetMode && (
               <motion.div
