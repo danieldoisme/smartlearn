@@ -120,6 +120,7 @@ export default function DocumentDetailPage() {
   const [editingQuestion, setEditingQuestion] = useState(null)
   const [editDraft, setEditDraft] = useState({ content: '', correctAnswer: '', options: [] })
   const [editMessage, setEditMessage] = useState('')
+  const [questionPage, setQuestionPage] = useState(1)
   const { data: chapterQuestions = [], isFetching: questionsLoading } = useChapterQuestions(questionsChapterId)
   const updateQuestion = useUpdateQuestion(docId)
   const chapters = useMemo(() => doc?.chapters || [], [doc])
@@ -151,6 +152,16 @@ export default function DocumentDetailPage() {
   const paginatedChapters = useMemo(() => {
     return chapters.slice((actualPage - 1) * ITEMS_PER_PAGE, actualPage * ITEMS_PER_PAGE)
   }, [chapters, actualPage])
+
+  const QUESTIONS_PER_PAGE = 5
+  const totalQuestionPages = Math.max(1, Math.ceil(chapterQuestions.length / QUESTIONS_PER_PAGE))
+  const actualQuestionPage = Math.min(questionPage, totalQuestionPages)
+  const paginatedQuestions = useMemo(() => {
+    return chapterQuestions.slice(
+      (actualQuestionPage - 1) * QUESTIONS_PER_PAGE,
+      actualQuestionPage * QUESTIONS_PER_PAGE,
+    )
+  }, [chapterQuestions, actualQuestionPage])
 
   useEffect(() => {
     if (!focusChapterId || !paginatedChapters.length) return
@@ -452,7 +463,7 @@ export default function DocumentDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setQuestionsChapterId(ch.id)}
+                            onClick={() => { setQuestionsChapterId(ch.id); setQuestionPage(1) }}
                           >
                             <ListChecks className="h-3.5 w-3.5" />
                             Sửa câu hỏi
@@ -748,9 +759,9 @@ export default function DocumentDetailPage() {
             {!questionsLoading && chapterQuestions.length === 0 && (
               <p className="text-sm text-slate-500 text-center py-6">Chưa có câu hỏi nào.</p>
             )}
-            {chapterQuestions.map((q, idx) => (
+            {paginatedQuestions.map((q, idx) => (
               <div key={q.id} className="rounded-xl border border-slate-200 p-3 flex items-start gap-3">
-                <span className="text-xs text-slate-400 font-mono mt-0.5 shrink-0">{idx + 1}</span>
+                <span className="text-xs text-slate-400 font-mono mt-0.5 shrink-0">{(actualQuestionPage - 1) * QUESTIONS_PER_PAGE + idx + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-800 line-clamp-2">{q.content}</p>
                   <p className="text-xs text-slate-400 mt-1">{q.questionType}</p>
@@ -776,6 +787,22 @@ export default function DocumentDetailPage() {
               </div>
             ))}
           </div>
+
+          {totalQuestionPages > 1 && (
+            <div className="flex items-center justify-between pt-3">
+              <span className="text-xs text-slate-500 font-medium">
+                Trang {actualQuestionPage} / {totalQuestionPages} ({(actualQuestionPage - 1) * QUESTIONS_PER_PAGE + 1} - {Math.min(actualQuestionPage * QUESTIONS_PER_PAGE, chapterQuestions.length)} / {chapterQuestions.length})
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setQuestionPage(Math.max(1, actualQuestionPage - 1))} disabled={actualQuestionPage <= 1}>
+                  <ChevronLeft className="h-4 w-4" /> Trước
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setQuestionPage(Math.min(totalQuestionPages, actualQuestionPage + 1))} disabled={actualQuestionPage >= totalQuestionPages}>
+                  Sau <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => { setQuestionsChapterId(null); setEditMessage('') }}>Đóng</Button>
