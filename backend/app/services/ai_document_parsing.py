@@ -103,9 +103,7 @@ async def infer_document_structure(
                 truncated_any = True
                 continue
             if status_code == 429:
-                logger.warning(
-                    "AI parser rate-limited for %s", document_title
-                )
+                logger.warning("AI parser rate-limited for %s", document_title)
                 return AIParseOutcome(
                     diagnostics=["AI parser rate-limited by provider. Try again later."]
                 )
@@ -126,9 +124,7 @@ async def infer_document_structure(
                 ]
             )
         except httpx.TimeoutException as exc:
-            logger.warning(
-                "AI parser timeout for %s: %s", document_title, str(exc)
-            )
+            logger.warning("AI parser timeout for %s: %s", document_title, str(exc))
             return AIParseOutcome(diagnostics=["AI parser timed out. Try again later."])
         except httpx.RequestError as exc:
             logger.warning(

@@ -386,7 +386,9 @@ async def delete_document(
         chapter_ids = [
             row[0]
             for row in (
-                await db.execute(select(Chapter.id).where(Chapter.document_id == doc.id))
+                await db.execute(
+                    select(Chapter.id).where(Chapter.document_id == doc.id)
+                )
             ).all()
         ]
         question_ids: list[int] = []
@@ -454,10 +456,14 @@ async def delete_document(
                     exam_id for exam_id in exam_ids if exam_id not in remaining_exam_ids
                 ]
                 if deletable_exam_ids:
-                    await db.execute(delete(Exam).where(Exam.id.in_(deletable_exam_ids)))
+                    await db.execute(
+                        delete(Exam).where(Exam.id.in_(deletable_exam_ids))
+                    )
 
             await db.execute(
-                delete(QuestionOption).where(QuestionOption.question_id.in_(question_ids))
+                delete(QuestionOption).where(
+                    QuestionOption.question_id.in_(question_ids)
+                )
             )
             await db.execute(delete(Question).where(Question.id.in_(question_ids)))
 

@@ -89,7 +89,7 @@ def build_sample_docx() -> bytes:
     for text in paragraphs:
         safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         body_parts.append(
-            "<w:p><w:r><w:t xml:space=\"preserve\">" + safe + "</w:t></w:r></w:p>"
+            '<w:p><w:r><w:t xml:space="preserve">' + safe + "</w:t></w:r></w:p>"
         )
 
     document_xml = (
