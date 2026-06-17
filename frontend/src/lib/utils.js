@@ -5,6 +5,18 @@ export function cn(...inputs) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Extract avatar initials from a name (falling back to email).
+ * Uses first + last word so "Đỗ Đức Thành" → "ĐT". Single word → first 2 chars.
+ */
+export function getInitials(name, email, fallback = '?') {
+  const source = (name || email || '').trim()
+  if (!source) return fallback
+  const parts = source.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 const fieldLabels = {
   chapters: 'chương',
   title: 'tiêu đề',

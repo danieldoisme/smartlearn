@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import { getErrorMessage } from '@/lib/utils'
 import { QuestionType, QuestionTypeLabel } from '@/models'
+import { usePreferences } from '@/api/me'
 import {
   useDocumentDetail,
   useGenerateQuestions,
@@ -95,6 +96,18 @@ export default function DocumentDetailPage() {
   const { data: doc, isLoading, isError } = useDocumentDetail(docId)
   const generateQuestions = useGenerateQuestions(docId)
   const updateStructure = useUpdateDocumentStructure(docId)
+  const { data: prefs } = usePreferences()
+
+  // Open the auto-generate modal, seeding type/count from saved learning
+  // preferences each time so it reflects the user's current defaults.
+  const openGenerate = (chapter) => {
+    setGenConfig({
+      type: prefs?.preferredQuestionType ?? 'mixed',
+      count: prefs?.defaultQuestionCount ?? 10,
+    })
+    setGenerateChapter(chapter)
+    setShowGenerate(true)
+  }
 
   const [showGenerate, setShowGenerate] = useState(false)
   const [showStructureEditor, setShowStructureEditor] = useState(false)
@@ -421,7 +434,7 @@ export default function DocumentDetailPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => { setGenerateChapter(ch); setShowGenerate(true) }}
+                          onClick={() => openGenerate(ch)}
                         >
                           <Sparkles className="h-3.5 w-3.5" />
                           Tạo câu hỏi
@@ -431,7 +444,7 @@ export default function DocumentDetailPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => { setGenerateChapter(ch); setShowGenerate(true) }}
+                            onClick={() => openGenerate(ch)}
                           >
                             <Sparkles className="h-3.5 w-3.5" />
                             Tạo thêm

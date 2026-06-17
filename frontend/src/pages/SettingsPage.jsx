@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { getInitials } from '@/lib/utils'
 import { QuestionType, DisplayMode, QuestionTypeLabel, DisplayModeLabel } from '@/models'
 import {
   useMe,
@@ -51,14 +52,6 @@ const container = {
 const item = {
   hidden: { opacity: 0, y: 12 },
   show: { opacity: 1, y: 0 },
-}
-
-function initialsOf(name, email) {
-  const source = (name || email || '').trim()
-  if (!source) return '?'
-  const parts = source.split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 export default function SettingsPage() {
@@ -212,7 +205,7 @@ function SettingsContent({ me, prefs }) {
                   <div className="relative group">
                     <Avatar className="h-20 w-20">
                       {avatarUrl && <AvatarImage src={avatarUrl} alt={profile.fullName || profile.email} />}
-                      <AvatarFallback className="text-2xl">{initialsOf(profile.fullName, profile.email)}</AvatarFallback>
+                      <AvatarFallback className="text-2xl">{getInitials(profile.fullName, profile.email)}</AvatarFallback>
                     </Avatar>
                     <button
                       type="button"

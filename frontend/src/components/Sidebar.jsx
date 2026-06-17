@@ -15,7 +15,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/auth/AuthContext'
 import { resolveAvatarUrl } from '@/api/me'
-import { cn } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Trang chủ' },
@@ -33,13 +33,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth()
   const displayName = user?.fullName?.trim() || 'Người dùng'
   const displayEmail = user?.email?.trim() || '—'
-  const initials = (user?.fullName || user?.email || 'U')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || '')
-    .join('') || 'U'
+  const initials = getInitials(user?.fullName, user?.email, 'U')
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-200/60 bg-white/80 backdrop-blur-xl">
