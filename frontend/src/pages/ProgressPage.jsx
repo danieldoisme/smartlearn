@@ -35,7 +35,18 @@ import {
   useDocumentProgressDetail,
 } from '@/api/progress'
 
-const FADE_IN = { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0 },
+}
+const chartItem = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1 },
+}
 
 const CustomTooltip = memo(function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -306,13 +317,13 @@ export default function ProgressPage() {
   const isLoading = wLoading || aLoading || dLoading
 
   return (
-    <motion.div {...FADE_IN} className="space-y-6 max-w-6xl">
-      <div>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-6xl">
+      <motion.div variants={item}>
         <h1 className="text-2xl font-bold text-slate-900">Tiến độ học tập</h1>
         <p className="text-slate-500 text-sm mt-1">Theo dõi kết quả và xu hướng</p>
-      </div>
+      </motion.div>
 
-      <div className="space-y-3">
+      <motion.div variants={item} className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           {[
             { label: '7 ngày', start: daysAgoString(6), end: todayString() },
@@ -368,9 +379,9 @@ export default function ProgressPage() {
             />
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {overviewStats.map((s) => (
           <Card key={s.label} className="p-5">
             <CardContent className="flex items-center gap-4">
@@ -384,7 +395,7 @@ export default function ProgressPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
+      </motion.div>
 
       <Tabs defaultValue="charts">
         <TabsList>
@@ -393,7 +404,7 @@ export default function ProgressPage() {
         </TabsList>
 
         <TabsContent value="charts">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <motion.div variants={chartItem} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="min-w-0 p-5">
               <CardContent>
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">Câu hỏi theo ngày (tuần này)</h3>
@@ -425,11 +436,11 @@ export default function ProgressPage() {
                 </ChartContainer>
               </CardContent>
             </Card>
-          </div>
+          </motion.div>
         </TabsContent>
 
         <TabsContent value="documents">
-          <div className="space-y-3">
+          <motion.div variants={item} className="space-y-3">
             {isLoading && <p className="text-sm text-slate-500">Đang tải...</p>}
             {!isLoading && documentProgress.length === 0 && (
               <p className="text-sm text-slate-500">Chưa có dữ liệu học tập nào.</p>
@@ -458,7 +469,7 @@ export default function ProgressPage() {
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         </TabsContent>
       </Tabs>
     </motion.div>
