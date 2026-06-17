@@ -634,17 +634,9 @@ export default function StudyPage() {
       setAnswers((prev) => ({ ...prev, [question.id]: res }))
       // "Cuối phiên" mode hides feedback, so advance straight to the next one.
       if (!revealAnswers) await goNext()
-    } catch (err) {
-      if (err?.response?.status === 409) {
-        // Server already stored an answer for this question (e.g. a stale
-        // retry). Lock it with whatever we know so the user is never stuck.
-        setAnswers((prev) => ({
-          ...prev,
-          [question.id]: prev[question.id] || { isCorrect: false },
-        }))
-        if (!revealAnswers) await goNext()
-      }
-      // Other errors: leave state unchanged; user can retry.
+    } catch {
+      // Leave state unchanged; the user can retry. Duplicate submits no longer
+      // error — the server returns the already-stored result with HTTP 200.
     }
   }
 

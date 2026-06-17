@@ -342,9 +342,16 @@ async def submit_answer(
         )
     ).scalar_one_or_none()
     if existing_answer is not None:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Question already answered in this session",
+        # Idempotent: a duplicate/stale submit returns the already-stored
+        # result (200) instead of a 409, so the client gets the real graded
+        # answer and the browser logs no failed request.
+        _, correct_answer, correct_label = _grade(q, existing_answer.selected_answer)
+        return StudyAnswerOut(
+            question_id=q.id,
+            is_correct=existing_answer.is_correct,
+            is_skipped=existing_answer.is_skipped,
+            correct_answer=correct_answer,
+            correct_label=correct_label,
         )
 
     if payload.is_skipped:
